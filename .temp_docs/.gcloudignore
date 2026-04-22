@@ -1,0 +1,10 @@
+.git
+node_modules
+README.md
+.env
+.env.example
+*.log
+.gitkeep
+.vscode
+.idea
+!dist/
