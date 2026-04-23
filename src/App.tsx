@@ -96,11 +96,11 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { FreteView } from './components/FreteView';
 import { Atendimento } from './views/AtendimentoView';
 import { MercadoLivre } from './views/MercadoLivreView';
-import { Clients } from './views/ClientsView';
 import { RegistroModal } from './components/RegistroModal';
 import { io } from 'socket.io-client';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Capacitor } from '@capacitor/core';
+import { StockFilters } from './components/filters';
 
 const modelosMotos = MOTOS_OFICIAIS;
 const modelosUnicos = MOTOS_OFICIAIS;
@@ -3213,151 +3213,40 @@ const InventoryView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOp
 
   return (
     <div className="space-y-4">
-      {/* Toolbar Profissional e Compacta */}
-      <div className={cn(
-        "relative z-50 p-3 md:p-4 rounded-3xl flex flex-col gap-3 transition-all duration-300 shadow-xl border",
-        theme === 'dark' 
-          ? "bg-zinc-900/90 backdrop-blur-xl border-zinc-800 shadow-black/40" 
-          : "bg-white/90 backdrop-blur-xl border-zinc-100 shadow-zinc-200/40",
-        isSearchOpen && "blur-md pointer-events-none opacity-50"
-      )}>
-        {/* Search Bar Compacta */}
-        <div className="w-full relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-violet-500 transition-colors" size={18} />
-          <input 
-            ref={searchInputRef}
-            type="text" 
-            placeholder={readOnly ? "Buscar no catálogo..." : "Buscar no estoque..."} 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={cn(
-              "w-full rounded-xl py-2.5 pl-11 pr-4 text-sm font-medium outline-none transition-all duration-200 border shadow-inner",
-              theme === 'dark' 
-                ? "bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-violet-500/50" 
-                : "bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:bg-white"
-            )}
-          />
-        </div>
-
-        {/* Filtros e Ações Compactos */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <CustomDropdown
-              theme={theme}
-              icon={<Filter size={14} />}
-              value={selectedCategory}
-              className="flex-1 md:flex-none min-w-[120px]"
-              onChange={(val) => {
-                setSelectedCategory(val);
-                setCurrentPage(1);
-              }}
-              options={[
-                { value: 'Todas', label: 'Categorias' },
-                ...CATEGORIAS_OFICIAIS.map(cat => ({ value: cat, label: cat }))
-              ]}
-            />
-            
-            <CustomDropdown
-              theme={theme}
-              icon={<Bike size={14} />}
-              value={selectedMoto}
-              className="flex-1 md:flex-none min-w-[120px]"
-              onChange={(val) => {
-                setSelectedMoto(val);
-                setCurrentPage(1);
-              }}
-              options={[
-                { value: 'Todas', label: 'Motos' },
-                ...MOTOS_OFICIAIS.map(moto => ({ value: moto, label: moto }))
-              ]}
-            />
-
-            <CustomDropdown
-              theme={theme}
-              icon={<ArrowDownAZ size={14} />}
-              value={sortConfig.key}
-              className="flex-1 md:flex-none min-w-[120px]"
-              onChange={(val) => {
-                setSortConfig({ key: val, direction: 'desc' });
-                setCurrentPage(1);
-              }}
-              options={[
-                { value: 'criado_em', label: 'Recentes' },
-                { value: 'valor', label: 'Preço' },
-                { value: 'nome', label: 'Nome' },
-                { value: 'estoque', label: 'Estoque' }
-              ]}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <button 
-              onClick={handleManualRefresh}
-              disabled={loading || isRefreshing}
-              className={cn(
-                "flex-1 md:flex-none flex items-center justify-center gap-2 h-10 px-4 rounded-xl transition-all duration-200 border text-[11px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-md",
-                theme === 'dark' 
-                  ? "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700" 
-                  : "bg-zinc-100 border-zinc-200 text-zinc-500 hover:bg-zinc-200"
-              )}
-            >
-              <RefreshCw size={14} className={cn((loading || isRefreshing) && "animate-spin")} />
-              <span className="hidden sm:inline">Sincronizar</span>
-            </button>
-
-            {!readOnly && (
-              <button 
-                onClick={() => {
-                  setEditingItem(null);
-                  setFormData({
-                    nome: '',
-                    categoria: '',
-                    novaCategoria: '',
-                    moto: '',
-                    outraMoto: '',
-                    valor: '',
-                    estoque: '1',
-                    ano: '',
-                    descricao: '',
-                    ml_link: '',
-                    imagem: ''
-                  });
-                  setIsModalOpen(true);
-                }}
-                className={cn(
-                  "flex-1 md:flex-none flex items-center justify-center gap-2 h-10 px-6 rounded-xl transition-all duration-200 border text-[11px] font-bold uppercase tracking-wider shadow-md",
-                  theme === 'dark'
-                    ? "bg-violet-600 border-violet-500 text-white hover:bg-violet-500 shadow-violet-500/20"
-                    : "bg-violet-600 border-violet-500 text-white hover:bg-violet-500 shadow-violet-500/30"
-                )}
-              >
-                <Plus size={16} />
-                <span>Novo Item</span>
-              </button>
-            )}
-
-            {(searchTerm || selectedCategory !== 'Todas' || selectedMoto !== 'Todas') && (
-              <button 
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedCategory('Todas');
-                  setSelectedMoto('Todas');
-                  setCurrentPage(1);
-                }}
-                className={cn(
-                  "flex-1 md:flex-none flex items-center justify-center gap-2 h-10 px-4 rounded-xl transition-all duration-200 border text-[11px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-md",
-                  theme === 'dark' 
-                    ? "bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20" 
-                    : "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-                )}
-              >
-                <X size={16} />
-                <span>Limpar</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+            {/* Filtros do Estoque - Versão Elegante */}
+      <StockFilters
+        theme={theme}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        selectedMoto={selectedMoto}
+        setSelectedMoto={setSelectedMoto}
+        sortConfig={sortConfig}
+        setSortConfig={setSortConfig}
+        loading={loading}
+        isRefreshing={isRefreshing}
+        onRefresh={handleManualRefresh}
+        onNewItem={() => {
+          setEditingItem(null);
+          setFormData({
+            nome: '',
+            categoria: '',
+            novaCategoria: '',
+            moto: '',
+            outraMoto: '',
+            valor: '',
+            estoque: '1',
+            ano: '',
+            descricao: '',
+            ml_link: '',
+            imagem: ''
+          });
+          setIsModalOpen(true);
+        }}
+        readOnly={readOnly}
+        setCurrentPage={setCurrentPage}
+      />
 
       {/* Bulk Actions Bar */}
       <AnimatePresence>
@@ -3890,246 +3779,227 @@ const InventoryView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOp
         )}
       </div>
 
-      {/* New Item Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[3000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
-            onClick={() => setIsModalOpen(false)}
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+      {/* Modal de criação de - Slide Up Version */}
+  {/* Modal de criação / edição - Bottom Sheet */}
+  <AnimatePresence>
+    {isModalOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[3000] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center"
+        onClick={() => { setIsModalOpen(false); setEditingItem(null); }}
+      >
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className={cn(
+            "relative w-full max-w-2xl h-[85vh] md:h-auto md:max-h-[80vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-2xl shadow-2xl",
+            theme === 'dark' ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Handle */}
+          <div className="flex justify-center py-2">
+            <div className="w-10 h-1.5 rounded-full bg-zinc-600/40" />
+          </div>
+
+          {/* Header */}
+          <div className={cn(
+            "sticky top-0 z-10 bg-inherit flex items-center justify-between p-4 border-b",
+            theme === 'dark' ? "border-zinc-800" : "border-zinc-200"
+          )}>
+            <h2 className="text-xl font-semibold">
+              {editingItem ? 'Editar Item' : '+ Novo Item no Estoque'}
+            </h2>
+            <button
+              onClick={() => { setIsModalOpen(false); setEditingItem(null); }}
               className={cn(
-                "relative w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden rounded-2xl shadow-2xl transition-colors",
-                theme === 'dark' ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"
+                "p-1 rounded-full transition-colors",
+                theme === 'dark' ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"
               )}
-              onClick={(e) => e.stopPropagation()}
             >
-              <div className={cn(
-                "flex items-center justify-between p-4 border-b",
-                theme === 'dark' ? "border-zinc-800" : "border-zinc-200"
-              )}>
-                <h2 className="text-xl font-semibold">
-                  {editingItem ? 'Editar Item' : '+ Novo Item no Estoque'}
-                </h2>
-                <button
-                  onClick={() => { setIsModalOpen(false); setEditingItem(null); }}
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Formulário */}
+          <form onSubmit={handleSave} className="flex-1 overflow-y-auto px-4 pt-4 pb-[90px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* URL da Imagem */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">URL da Imagem</label>
+                <input
+                  type="url"
+                  value={formData.imagem}
+                  onChange={(e) => setFormData({...formData, imagem: e.target.value})}
+                  placeholder="https://..."
                   className={cn(
-                    "p-1 rounded-full transition-colors",
-                    theme === 'dark' ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+                    "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
                   )}
-                >
-                  <X size={20} />
-                </button>
+                />
               </div>
 
-              <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">URL da Imagem</label>
-                    <input 
-                      type="url"
-                      value={formData.imagem}
-                      onChange={(e) => setFormData({...formData, imagem: e.target.value})}
-                      placeholder="https://..."
-                      className={cn(
-                        "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                        theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome da Peça *</label>
-                    <input 
-                      required
-                      type="text"
-                      value={formData.nome}
-                      onChange={(e) => {
-                        const novoNome = e.target.value;
-                        setFormData(prev => {
-                          const novoEstado = {...prev, nome: novoNome};
-                          if (novoNome.length < 3) {
-                            novoEstado.moto = '';
-                            novoEstado.categoria = '';
-                          } else {
-                            const modelo = extrairModeloMoto(novoNome);
-                            if (modelo) novoEstado.moto = modelo;
-                            
-                            const categoria = extrairCategoria(novoNome);
-                            if (categoria) novoEstado.categoria = categoria;
-                          }
-                          return novoEstado;
-                        });
-                      }}
-                      placeholder="Ex: Relé de Partida"
-                      className={cn(
-                        "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                        theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                      )}
-                    />
-                  </div>
+              {/* Nome */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome da Peça *</label>
+                <input
+                  required
+                  type="text"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                  placeholder="Ex: Relé de Partida"
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Categoria</label>
-                    <CustomDropdown
-                      theme={theme}
-                      variant="form"
-                      value={formData.categoria}
-                      onChange={(val) => setFormData({...formData, categoria: val})}
-                      options={[
-                        { value: '', label: 'Selecione...' },
-                        ...CATEGORIAS_OFICIAIS.map(cat => ({ value: cat, label: cat })),
-                        { value: 'nova', label: '+ Nova Categoria' }
-                      ]}
-                    />
-                    {formData.categoria === 'nova' && (
-                      <input 
-                        type="text"
-                        value={formData.novaCategoria}
-                        onChange={(e) => setFormData({...formData, novaCategoria: e.target.value})}
-                        placeholder="Nome da nova categoria"
-                        className={cn(
-                          "w-full mt-2 border rounded-xl py-2 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                          theme === 'dark' ? "bg-zinc-950 border-violet-500/50 text-zinc-200" : "bg-white border-violet-500/50 text-zinc-900"
-                        )}
-                      />
-                    )}
-                  </div>
+              {/* Categoria */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Categoria</label>
+                <CustomDropdown
+                  theme={theme}
+                  variant="form"
+                  value={formData.categoria}
+                  onChange={(val) => setFormData({...formData, categoria: val})}
+                  options={[
+                    { value: '', label: 'Selecione...' },
+                    ...CATEGORIAS_OFICIAIS.map(cat => ({ value: cat, label: cat }))
+                  ]}
+                />
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Moto</label>
-                    <CustomDropdown
-                      theme={theme}
-                      variant="form"
-                      value={formData.moto}
-                      onChange={(val) => setFormData({...formData, moto: val})}
-                      options={[
-                        { value: '', label: 'Selecione...' },
-                        ...MOTOS_OFICIAIS.map(moto => ({ value: moto, label: moto })),
-                        { value: 'outra', label: '+ Outra' }
-                      ]}
-                    />
-                    {formData.moto === 'outra' && (
-                      <input 
-                        type="text"
-                        value={formData.outraMoto}
-                        onChange={(e) => setFormData({...formData, outraMoto: e.target.value})}
-                        placeholder="Modelo da moto"
-                        className={cn(
-                          "w-full mt-2 border rounded-xl py-2 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                          theme === 'dark' ? "bg-zinc-950 border-violet-500/50 text-zinc-200" : "bg-white border-violet-500/50 text-zinc-900"
-                        )}
-                      />
-                    )}
-                  </div>
+              {/* Moto */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Moto</label>
+                <CustomDropdown
+                  theme={theme}
+                  variant="form"
+                  value={formData.moto}
+                  onChange={(val) => setFormData({...formData, moto: val})}
+                  options={[
+                    { value: '', label: 'Selecione...' },
+                    ...MOTOS_OFICIAIS.map(m => ({ value: m, label: m }))
+                  ]}
+                />
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Ano</label>
-                    <input 
-                      type="text"
-                      value={formData.ano}
-                      onChange={(e) => setFormData({...formData, ano: e.target.value})}
-                      placeholder="Ex: 2014-2018"
-                      className={cn(
-                        "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                        theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                      )}
-                    />
-                  </div>
+              {/* Ano */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Ano</label>
+                <input
+                  type="text"
+                  value={formData.ano}
+                  onChange={(e) => setFormData({...formData, ano: e.target.value})}
+                  placeholder="Ex: 2014-2018"
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Valor (R$)</label>
-                    <input 
-                      type="number"
-                      step="0.01"
-                      value={formData.valor}
-                      onChange={(e) => setFormData({...formData, valor: e.target.value})}
-                      placeholder="0,00"
-                      className={cn(
-                        "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                        theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                      )}
-                    />
-                  </div>
+              {/* Valor */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Valor (R$)</label>
+                <input
+                  type="number"
+                  value={formData.valor}
+                  onChange={(e) => setFormData({...formData, valor: e.target.value})}
+                  placeholder="0,00"
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Estoque</label>
-                    <input 
-                      type="number"
-                      value={formData.estoque}
-                      onChange={(e) => setFormData({...formData, estoque: e.target.value})}
-                      placeholder="1"
-                      className={cn(
-                        "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                        theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                      )}
-                    />
-                  </div>
-                </div>
+              {/* Estoque */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Estoque</label>
+                <input
+                  type="number"
+                  value={formData.estoque}
+                  onChange={(e) => setFormData({...formData, estoque: e.target.value})}
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Link Mercado Livre</label>
-                  <input 
-                    type="url"
-                    value={formData.ml_link}
-                    onChange={(e) => setFormData({...formData, ml_link: e.target.value})}
-                    placeholder="https://produto.mercadolivre.com.br/..."
-                    className={cn(
-                      "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                      theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                    )}
-                  />
-                </div>
+              {/* ML */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Link Mercado Livre</label>
+                <input
+                  type="url"
+                  value={formData.ml_link}
+                  onChange={(e) => setFormData({...formData, ml_link: e.target.value})}
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição / Observações</label>
-                  <textarea 
-                    rows={3}
-                    value={formData.descricao}
-                    onChange={(e) => setFormData({...formData, descricao: e.target.value})}
-                    placeholder="Detalhes adicionais da peça..."
-                    className={cn(
-                      "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors resize-none",
-                      theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                    )}
-                  />
-                </div>
+              {/* Descrição */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
+                <textarea
+                  rows={3}
+                  value={formData.descricao}
+                  onChange={(e) => setFormData({...formData, descricao: e.target.value})}
+                  className={cn(
+                    "w-full border rounded-xl py-2.5 px-4 text-sm resize-none",
+                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
+                  )}
+                />
+              </div>
 
-                <div className="pt-4 flex items-center gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className={cn(
-                      "flex-1 px-6 py-3 rounded-xl font-medium transition-all active:scale-95",
-                      theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 border border-zinc-200 text-zinc-600 hover:bg-zinc-200"
-                    )}
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={isSaving}
-                    className={cn(
-                      "flex-1 px-8 py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed",
-                      theme === 'dark'
-                        ? "bg-violet-600 border border-violet-500 text-white shadow-lg shadow-violet-900/20 hover:bg-violet-500"
-                        : "bg-violet-600 border border-violet-500 text-white shadow-lg shadow-violet-200/50 hover:bg-violet-700"
-                    )}
-                  >
-                    {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                    Salvar no Notion
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          </form>
+
+          {/* Bottom Actions */}
+          <div className={cn(
+            "sticky bottom-0 w-full p-4 border-t bg-inherit",
+            theme === 'dark' ? "border-zinc-800" : "border-zinc-200"
+          )}>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className={cn(
+                  "flex-1 px-6 py-3 rounded-xl",
+                  theme === 'dark'
+                    ? "bg-zinc-800 text-zinc-300"
+                    : "bg-zinc-100 text-zinc-600"
+                )}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="submit"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex-1 px-8 py-3 rounded-xl bg-violet-600 text-white flex items-center justify-center gap-2"
+              >
+                {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                {editingItem ? 'Atualizar' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
 
       {/* Modal de Confirmação de Exclusão Individual */}
       <AnimatePresence>
