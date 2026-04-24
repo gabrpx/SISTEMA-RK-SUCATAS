@@ -1,9 +1,9 @@
 ﻿// ============================================
-// APP.TSX â€” Componente raiz da aplicaÃ§Ã£o RK Sucatas
+// APP.TSX â€” Componente raiz da aplicação RK Sucatas
 // ============================================
-// ResponsÃ¡vel por:
+// Responsável por:
 // - Contexto global de dados (estoque, vendas, motos)
-// - Layout principal (sidebar, header, navegaÃ§Ã£o)
+// - Layout principal (sidebar, header, navegação)
 // - Views: Dashboard, Estoque, Vendas, Motos, Config, etc.
 // ============================================
 
@@ -21,9 +21,9 @@ import React, { useState, useEffect, useMemo, useContext, createContext, useRef,
 // ============================================
 // IMPORTS DO FIREBASE E COMPONENTES INTERNOS
 // ============================================
-// db: instÃ¢ncia do Firestore para notificaÃ§Ãµes em tempo real
-// query, collection, etc: utilitÃ¡rios de consulta do Firestore
-// QuestionsDashboard, AdminUsers, AuditLogs: componentes de funcionalidades especÃ­ficas
+// db: instância do Firestore para notificações em tempo real
+// query, collection, etc: utilitários de consulta do Firestore
+// QuestionsDashboard, AdminUsers, AuditLogs: componentes de funcionalidades específicas
 // ============================================
 import { db } from './firebase'; // keeping only what is necessary, if any
 import { query, collection, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -144,8 +144,8 @@ const parseJson = async (res: Response) => {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.error(`âŒ Erro ao parsear JSON de ${res.url}. ConteÃºdo recebido:`, text.substring(0, 200));
-    throw new Error(`Resposta invÃ¡lida de ${res.url}`);
+    console.error(`❌ Erro ao parsear JSON de ${res.url}. Conteúdo recebido:`, text.substring(0, 200));
+    throw new Error(`Resposta inválida de ${res.url}`);
   }
 };
 
@@ -172,13 +172,13 @@ const fetchWithRetry = async (url: string, init?: RequestInit, retries = 8) => {
     try {
       const res = await fetch(url, { ...init, headers });
       
-      // Se o status for 503 ou 502, Ã© provÃ¡vel que o servidor esteja iniciando
+      // Se o status for 503 ou 502, é provável que o servidor esteja iniciando
       if (res.status === 503 || res.status === 502) {
-        throw new Error('Servidor indisponÃ­vel (iniciando)');
+        throw new Error('Servidor indisponível (iniciando)');
       }
 
       // Verifica o corpo da resposta mesmo se o status for 200
-      // O proxy da plataforma Ã s vezes retorna 200 com o HTML de "Starting Server"
+      // O proxy da plataforma às vezes retorna 200 com o HTML de "Starting Server"
       const text = await res.clone().text();
       if (
         text.includes('<title>Starting Server...</title>') || 
@@ -198,21 +198,21 @@ const fetchWithRetry = async (url: string, init?: RequestInit, retries = 8) => {
       return res;
     } catch (err) {
       // Don't retry if it's a known non-retryable error
-      if (err instanceof Error && err.message.includes('SessÃ£o expirada')) {
+      if (err instanceof Error && err.message.includes('Sessão expirada')) {
         throw err;
       }
       
       if (i === retries) {
-        console.error(`âŒ Falha definitiva ao buscar ${url}:`, err);
+        console.error(`❌ Falha definitiva ao buscar ${url}:`, err);
         throw err;
       }
       // Espera progressiva mais longa: 3s, 6s, 9s...
       const delay = 3000 * (i + 1);
-      console.warn(`âš ï¸ Tentativa ${i + 1} falhou para ${url}: ${err instanceof Error ? err.message : String(err)}. Tentando novamente em ${delay}ms...`);
+      console.warn(`⚠️ Tentativa ${i + 1} falhou para ${url}: ${err instanceof Error ? err.message : String(err)}. Tentando novamente em ${delay}ms...`);
       await new Promise(r => setTimeout(r, delay));
     }
   }
-  throw new Error('Falha apÃ³s retentativas');
+  throw new Error('Falha após retentativas');
 };
 
 function normalizarTexto(texto: string) {
@@ -257,11 +257,11 @@ function extrairModeloMoto(textoPeca: string) {
 function extrairCategoria(textoPeca: string) {
   if (!textoPeca || textoPeca.length < 3) return '';
   const textoNormalizado = normalizarTexto(textoPeca);
-  // Ordena por tamanho decrescente para pegar o termo mais especÃ­fico primeiro
+  // Ordena por tamanho decrescente para pegar o termo mais específico primeiro
   const categoriasOrdenadas = [...CATEGORIAS_OFICIAIS].sort((a, b) => b.length - a.length);
   for (const categoria of categoriasOrdenadas) {
     const categoriaNormalizada = normalizarTexto(categoria);
-    // Se o texto da peÃ§a contÃ©m a categoria OU a categoria contÃ©m o texto da peÃ§a (ex: "escapamento" -> "Escapamentos")
+    // Se o texto da peça contém a categoria OU a categoria contém o texto da peça (ex: "escapamento" -> "Escapamentos")
     if (textoNormalizado.includes(categoriaNormalizada) || categoriaNormalizada.includes(textoNormalizado)) return categoria;
   }
   return '';
@@ -335,7 +335,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async (force = false, silent = false) => {
     const now = Date.now();
-    // Se nÃ£o for forÃ§ado, nÃ£o for silencioso e o cache for recente, nÃ£o faz nada
+    // Se não for forçado, não for silencioso e o cache for recente, não faz nada
     if (!force && !silent && (now - lastFetch) < CACHE_TIME && inventory.length > 0) {
       return; 
     }
@@ -368,10 +368,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.error('âŒ Erro ao processar estoque:', e);
+          console.error('❌ Erro ao processar estoque:', e);
         }
       } else {
-        console.error('âŒ Erro ao buscar estoque:', results[0].reason);
+        console.error('❌ Erro ao buscar estoque:', results[0].reason);
       }
 
       // Vendas
@@ -390,10 +390,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.error('âŒ Erro ao processar vendas:', e);
+          console.error('❌ Erro ao processar vendas:', e);
         }
       } else {
-        console.error('âŒ Erro ao buscar vendas:', results[1].reason);
+        console.error('❌ Erro ao buscar vendas:', results[1].reason);
       }
 
       // Motos
@@ -401,8 +401,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
           const data = await parseJson(results[2].value);
           if (data.success) {
-            // Grace period: se houve uma mutaÃ§Ã£o recente (Ãºltimos 15s) e Ã© um fetch silencioso,
-            // nÃ£o sobrescrevemos o estado das motos para evitar que itens novos sumam (eventual consistency do Notion)
+            // Grace period: se houve uma mutação recente (últimos 15s) e é um fetch silencioso,
+            // não sobrescrevemos o estado das motos para evitar que itens novos sumam (eventual consistency do Notion)
             const isRecentMutation = (Date.now() - lastMutationRef.current) < 15000;
             if (!silent || !isRecentMutation || motos.length === 0) {
               setMotos(prev => {
@@ -415,22 +415,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 return prev;
               });
             } else {
-              console.log('â³ Pulando atualizaÃ§Ã£o de motos devido a mutaÃ§Ã£o recente');
+              console.log('⏳ Pulando atualização de motos devido a mutação recente');
             }
           }
         } catch (e) {
-          console.error('âŒ Erro ao processar motos:', e);
+          console.error('❌ Erro ao processar motos:', e);
         }
       } else {
-        console.error('âŒ Erro ao buscar motos:', results[2].reason);
+        console.error('❌ Erro ao buscar motos:', results[2].reason);
       }
       
       setLastFetch(now);
     } catch (error: any) {
-      console.error('Erro crÃ­tico ao carregar dados:', error);
-      // SÃ³ mostra erro se nÃ£o for silencioso
+      console.error('Erro crítico ao carregar dados:', error);
+      // Só mostra erro se não for silencioso
       if (!silent) {
-        // Aqui poderÃ­amos usar um toast ou setError global
+        // Aqui poderíamos usar um toast ou setError global
       }
     } finally {
       setLoading(false);
@@ -441,7 +441,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // Carrega os dados imediatamente ao montar o componente
     loadData();
 
-    // Socket global para WhatsApp e NotificaÃ§Ãµes
+    // Socket global para WhatsApp e Notificações
     const socket = io();
     
     socket.on('whatsapp-status', (status) => {
@@ -473,18 +473,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }));
     });
 
-    // Polling para sincronizaÃ§Ã£o "instantÃ¢nea" (silenciosa)
+    // Polling para sincronização "instantânea" (silenciosa)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadData(false, true);
       }
-    }, 10000); // Aumentado para 10 segundos e adicionado verificaÃ§Ã£o de visibilidade
+    }, 10000); // Aumentado para 10 segundos e adicionado verificação de visibilidade
 
     const initApp = async () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await CapacitorUpdater.notifyAppReady();
-          console.log('âœ… App pronto para atualizaÃ§Ãµes automÃ¡ticas');
+          console.log('✅ App pronto para atualizações automáticas');
         } catch (error) {
           console.error('Erro no auto-update:', error);
         }
@@ -977,7 +977,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
   };
 
   if (loading && items.length === 0) {
-    // NÃ£o bloquear a tela
+    // Não bloquear a tela
   }
 
   return (
@@ -996,7 +996,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           <input 
             ref={searchInputRef}
             type="text" 
-            placeholder="Buscar por peÃ§a, moto ou ID..." 
+            placeholder="Buscar por peça, moto ou ID..." 
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -1011,7 +1011,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           />
         </div>
 
-        {/* Filtros e AÃ§Ãµes Compactos */}
+        {/* Filtros e Ações Compactos */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <CustomDropdown
@@ -1070,7 +1070,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           </div>
         </div>
       </div>
-        {/* Filtros RÃ¡pidos e PerÃ­odo */}
+        {/* Filtros Rápidos e Período */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4 border-t border-zinc-800/30">
           <div className="flex flex-wrap items-center gap-2">
             {[
@@ -1078,7 +1078,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               { id: 'today', label: 'Hoje' },
               { id: 'yesterday', label: 'Ontem' },
               { id: 'this-week', label: 'Semana' },
-              { id: 'this-month', label: 'MÃªs' },
+              { id: 'this-month', label: 'Mês' },
               { id: 'last-30-days', label: '30 Dias' },
             ].map((filter) => (
               <button
@@ -1119,7 +1119,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   theme === 'dark' ? "text-zinc-200" : "text-zinc-900"
                 )}
               />
-              <span className="text-zinc-500 text-xs">atÃ©</span>
+              <span className="text-zinc-500 text-xs">até</span>
               <input 
                 type="date"
                 value={endDate}
@@ -1178,13 +1178,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       {selectedIds.length === paginatedItems.length && paginatedItems.length > 0 && <Check className="text-white" size={14} />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">PeÃ§a</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Peça</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Moto</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-emerald-500">Valor</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Tipo</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Data</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">ID</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">AÃ§Ãµes</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>
                 </tr>
             </thead>
             <tbody className={cn(
@@ -1264,11 +1264,11 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                     ) : (
                       <span className={cn(
                         "text-sm font-black font-sans transition-all duration-300",
-                        (item.tipo?.toUpperCase() === 'SAÃDA')
+                        (item.tipo?.toUpperCase() === 'SAÍDA')
                           ? "text-rose-500 [text-shadow:0_0_10px_rgba(244,63,94,0.5)]"
                           : "text-emerald-500 [text-shadow:0_0_10px_rgba(16,185,129,0.5)]"
                       )}>
-                        {item.tipo?.toUpperCase() === 'SAÃDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
+                        {item.tipo?.toUpperCase() === 'SAÍDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
                       </span>
                     )}
                   </td>
@@ -1277,10 +1277,10 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       <span className={cn(
                         "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm transition-colors",
                         item.tipo.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
-                        item.tipo.toUpperCase() === 'SAÃDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
+                        item.tipo.toUpperCase() === 'SAÍDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
                         item.tipo.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                        item.tipo.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                        item.tipo.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                        item.tipo.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                        item.tipo.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                         item.tipo.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                         item.tipo.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                         (theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200")
@@ -1402,11 +1402,11 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <span className={cn(
                   "text-lg font-black font-sans transition-all duration-300",
-                  (item.tipo?.toUpperCase() === 'SAÃDA')
+                  (item.tipo?.toUpperCase() === 'SAÍDA')
                     ? "text-rose-500 [text-shadow:0_0_10px_rgba(244,63,94,0.5)]"
                     : "text-emerald-500 [text-shadow:0_0_10px_rgba(16,185,129,0.5)]"
                 )}>
-                  {item.tipo?.toUpperCase() === 'SAÃDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
+                  {item.tipo?.toUpperCase() === 'SAÍDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
                 </span>
               </div>
               
@@ -1415,10 +1415,10 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   <div className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm flex items-center gap-1.5",
                     item.tipo.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
-                    item.tipo.toUpperCase() === 'SAÃDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
+                    item.tipo.toUpperCase() === 'SAÍDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
                     item.tipo.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                    item.tipo.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                    item.tipo.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                    item.tipo.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                    item.tipo.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                     item.tipo.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                     item.tipo.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                     (theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200")
@@ -1480,7 +1480,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="text-xs font-bold text-zinc-400">PÃ¡gina {currentPage} de {totalPages}</span>
+          <span className="text-xs font-bold text-zinc-400">Página {currentPage} de {totalPages}</span>
           <button 
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages || totalPages === 0}
@@ -1520,13 +1520,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Registrar Venda</h2>
-                  <p className="text-sm text-zinc-500">Adicione os detalhes da nova transaÃ§Ã£o</p>
+                  <p className="text-sm text-zinc-500">Adicione os detalhes da nova transação</p>
                 </div>
               </div>
 
               <form onSubmit={handleSaveSale} className="space-y-5">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nova MovimentaÃ§Ã£o</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nova Movimentação</label>
                   <input 
                     required
                     type="text" 
@@ -1535,7 +1535,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       const novoNome = e.target.value;
                       setFormData(prev => {
                         const novoEstado = {...prev, nome: novoNome};
-                        // LÃ³gica de extraÃ§Ã£o automÃ¡tica
+                        // Lógica de extração automática
                         if (novoNome.length < 3) {
                           novoEstado.moto = '';
                           novoEstado.categoria = '';
@@ -1604,7 +1604,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                         { value: '', label: 'Selecione...' },
                         ...PAGAMENTOS_OFICIAIS.map(p => ({ value: p, label: p })),
                         { value: 'VENDA MERCADO LIVRE', label: 'VENDA MERCADO LIVRE' },
-                        { value: 'SAÃDA', label: 'SAÃDA' },
+                        { value: 'SAÍDA', label: 'SAÍDA' },
                       ]}
                     />
                   </div>
@@ -1680,13 +1680,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Editar Venda</h2>
-                  <p className="text-sm text-zinc-500">Atualize os detalhes da transaÃ§Ã£o</p>
+                  <p className="text-sm text-zinc-500">Atualize os detalhes da transação</p>
                 </div>
               </div>
 
               <form onSubmit={handleUpdateSale} className="space-y-5">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§a Vendida</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peça Vendida</label>
                   <input 
                     required
                     type="text" 
@@ -1744,7 +1744,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                         { value: '', label: 'Selecione...' },
                         ...PAGAMENTOS_OFICIAIS.map(p => ({ value: p, label: p })),
                         { value: 'VENDA MERCADO LIVRE', label: 'VENDA MERCADO LIVRE' },
-                        { value: 'SAÃDA', label: 'SAÃDA' },
+                        { value: 'SAÍDA', label: 'SAÍDA' },
                       ]}
                     />
                   </div>
@@ -1785,7 +1785,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   )}
                 >
                   {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  Salvar AlteraÃ§Ãµes
+                  Salvar Alterações
                 </button>
               </div>
             </form>
@@ -1794,7 +1794,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
         )}
       </AnimatePresence>
 
-      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o Individual */}
+      {/* Modal Confirmação Exclusão Individual */}
       <AnimatePresence>
         {isDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1812,7 +1812,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir Venda?</h3>
               <p className="text-zinc-500 text-sm mb-8">
-                Esta aÃ§Ã£o nÃ£o pode ser desfeita. A venda serÃ¡ removida permanentemente do Notion.
+                Esta ação não pode ser desfeita. A venda será removida permanentemente do Notion.
               </p>
               <div className="flex items-center gap-3">
                 <button 
@@ -1842,7 +1842,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
         )}
       </AnimatePresence>
 
-      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o em Massa */}
+      {/* Modal Confirmação Exclusão em Massa */}
       <AnimatePresence>
         {isBulkDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1860,7 +1860,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir {selectedIds.length} Vendas?</h3>
               <p className="text-zinc-500 text-sm mb-8">
-                Esta aÃ§Ã£o removerÃ¡ permanentemente todas as vendas selecionadas do Notion.
+                Esta ação removerá permanentemente todas as vendas selecionadas do Notion.
               </p>
               <div className="flex items-center gap-3">
                 <button 
@@ -2085,7 +2085,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             )}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className={cn("text-lg font-black", theme === 'dark' ? "text-white" : "text-zinc-900")}>Filtros e OrdenaÃ§Ã£o</h3>
+              <h3 className={cn("text-lg font-black", theme === 'dark' ? "text-white" : "text-zinc-900")}>Filtros e Ordenação</h3>
               <button onClick={() => setIsFilterModalOpen(false)} className={cn("p-2 rounded-full", theme === 'dark' ? "hover:bg-zinc-800" : "hover:bg-zinc-100")}>
                 <X size={20} />
               </button>
@@ -2125,7 +2125,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
               )}
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">OrdenaÃ§Ã£o</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Ordenação</label>
                 <CustomDropdown
                   theme={theme}
                   icon={<ArrowDownAZ size={14} />}
@@ -2133,8 +2133,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   className="w-full"
                   onChange={(val) => setSortOrder(val)}
                   options={[
-                    { value: "Data de CriaÃ§Ã£o", label: "Mais recente" },
-                    { value: "Data de CriaÃ§Ã£o Antigo", label: "Mais antigo" },
+                    { value: "Data de Criação", label: "Mais recente" },
+                    { value: "Data de Criação Antigo", label: "Mais antigo" },
                     { value: "Nome", label: "Nome" },
                     { value: "Mais baratas", label: "Mais baratas" },
                     { value: "Mais caras", label: "Mais caras" },
@@ -2189,41 +2189,41 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // FunÃ§Ã£o para lidar com seleÃ§Ã£o de arquivos
+  // Função para lidar com seleção de arquivos
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       // Limitar a 15 arquivos
       if (files.length + selectedFiles.length > 15) {
-        alert('MÃ¡ximo de 15 fotos permitido');
+        alert('Máximo de 15 fotos permitido');
         return;
       }
       setSelectedFiles(prev => [...prev, ...files]);
     }
   };
 
-  // FunÃ§Ã£o para remover arquivo selecionado
+  // Função para remover arquivo selecionado
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // FunÃ§Ã£o para fazer upload dos arquivos
+  // Função para fazer upload dos arquivos
   const uploadFiles = async (isEdit: boolean = false) => {
     if (selectedFiles.length === 0) return;
     
     const uploadedUrls = await performUpload();
     if (uploadedUrls.length > 0) {
       if (isEdit && editingMoto) {
-        console.log('ðŸŽ‰ Todas as imagens enviadas:', uploadedUrls);
+        console.log('🎉 Todas as imagens enviadas:', uploadedUrls);
 
         // 3. ATUALIZAR A MOTO COM AS NOVAS IMAGENS
         // PEGAR AS IMAGENS EXISTENTES + AS NOVAS
         const imagensExistentes = editFormData.imagens || [];
         const todasImagens = [...imagensExistentes, ...uploadedUrls];
 
-        console.log('ðŸ“¸ Imagens que serÃ£o salvas:', todasImagens);
+        console.log('📸 Imagens que serão salvas:', todasImagens);
 
-        // Preparar os dados para atualizaÃ§Ã£o
+        // Preparar os dados para atualização
         const motoData = {
           nome: editFormData.nome,
           marca: editFormData.marca,
@@ -2237,10 +2237,10 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           pecas_retiradas: editFormData.pecas_retiradas,
           status: editFormData.status,
           descricao: editFormData.descricao,
-          imagens: todasImagens // â† IMPORTANTE: incluir as imagens aqui
+          imagens: todasImagens // ← IMPORTANTE: incluir as imagens aqui
         };
 
-        console.log('ðŸ“¤ Enviando atualizaÃ§Ã£o com imagens:', motoData);
+        console.log('📤 Enviando atualização com imagens:', motoData);
 
         try {
           const updateResponse = await fetchWithRetry(`/api/motos/${editingMoto.id}`, {
@@ -2254,8 +2254,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           try {
             result = JSON.parse(responseText);
           } catch (e) {
-            console.error('âŒ Resposta invÃ¡lida do servidor:', responseText.substring(0, 200));
-            throw new Error('O servidor retornou um formato invÃ¡lido (HTML em vez de JSON).');
+            console.error('❌ Resposta inválida do servidor:', responseText.substring(0, 200));
+            throw new Error('O servidor retornou um formato inválido (HTML em vez de JSON).');
           }
 
           if (result.success) {
@@ -2265,13 +2265,13 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
               imagens: todasImagens,
               imagem: prev.imagem || todasImagens[0] || ''
             }));
-            alert('âœ… Imagens salvas com sucesso!');
+            alert('✅ Imagens salvas com sucesso!');
           } else {
-            alert('âŒ Erro ao salvar imagens no banco: ' + result.error);
+            alert('❌ Erro ao salvar imagens no banco: ' + result.error);
           }
         } catch (error) {
-          console.error('Erro ao atualizar moto apÃ³s upload:', error);
-          alert('âŒ Erro de conexÃ£o ao salvar imagens.');
+          console.error('Erro ao atualizar moto após upload:', error);
+          alert('❌ Erro de conexão ao salvar imagens.');
         }
       } else {
         setFormData(prev => {
@@ -2352,7 +2352,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
       return successfulUrls;
     } catch (error: any) {
       console.error('Erro no upload:', error);
-      alert('âŒ Erro ao enviar fotos: ' + (error as Error).message);
+      alert('❌ Erro ao enviar fotos: ' + (error as Error).message);
       return [];
     } finally {
       setUploading(false);
@@ -2412,7 +2412,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   const [brandFilter, setBrandFilter] = useState('Todas');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [cilindradaFilter, setCilindradaFilter] = useState('Todas');
-  const [sortOrder, setSortOrder] = useState('Data de CriaÃ§Ã£o');
+  const [sortOrder, setSortOrder] = useState('Data de Criação');
   const [anoMinFilter, setAnoMinFilter] = useState('');
   const [valorMinFilter, setValorMinFilter] = useState('');
   const [valorMaxFilter, setValorMaxFilter] = useState('');
@@ -2437,7 +2437,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
   const getStatusColor = (status: string, isBadge: boolean = false) => {
     switch (status) {
-      case 'DisponÃ­vel':
+      case 'Disponível':
         return isBadge ? "bg-emerald-500 text-white" : "bg-emerald-500/10 text-emerald-500";
       case 'Desmontada':
         return isBadge ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-500";
@@ -2556,7 +2556,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
     setIsSaving(true);
 
     try {
-      // Upload automÃ¡tico se houver arquivos pendentes
+      // Upload automático se houver arquivos pendentes
       let currentImagens = [...editFormData.imagens];
       let currentImagem = editFormData.imagem;
 
@@ -2570,7 +2570,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
       const motoId = editingMoto.id;
       
-      // Garantir que os campos obrigatÃ³rios estejam presentes e formatados
+      // Garantir que os campos obrigatórios estejam presentes e formatados
       const payload = {
         nome: editFormData.nome || editingMoto.nome,
         marca: editFormData.marca || editingMoto.marca,
@@ -2587,7 +2587,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         imagens: currentImagens
       };
       
-      console.log('ðŸ“¤ Enviando atualizaÃ§Ã£o:', payload);
+      console.log('📤 Enviando atualização:', payload);
       
       const response = await fetchWithRetry(`/api/motos/${motoId}`, {
         method: 'PATCH',
@@ -2596,7 +2596,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
       });
       
       const result = await response.json();
-      console.log('ðŸ“¥ Resposta do servidor:', result);
+      console.log('📥 Resposta do servidor:', result);
       
       if (result.success) {
         // Atualizar o estado local com os dados retornados do servidor
@@ -2659,7 +2659,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Upload automÃ¡tico se houver arquivos pendentes
+      // Upload automático se houver arquivos pendentes
       let currentImagens = [...formData.imagens];
       let currentImagem = formData.imagem;
 
@@ -2719,7 +2719,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   }, [items]);
 
   const statuses = useMemo(() => {
-    const s = new Set(['DisponÃ­vel', 'Em estoque', 'Desmontada', 'Vendida']);
+    const s = new Set(['Disponível', 'Em estoque', 'Desmontada', 'Vendida']);
     items.forEach(item => {
       if (item.status) s.add(item.status);
     });
@@ -2777,20 +2777,20 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
     // Ordenar
     result.sort((a, b) => {
-      // 1. Prioridade MÃ¡xima: Vendidas sempre para o final
+      // 1. Prioridade Máxima: Vendidas sempre para o final
       const aIsSold = a.status === 'Vendida';
       const bIsSold = b.status === 'Vendida';
       if (aIsSold && !bIsSold) return 1;
       if (!aIsSold && bIsSold) return -1;
 
-      // 2. Prioridade SecundÃ¡ria: Com fotos no topo (se nÃ£o for vendida)
+      // 2. Prioridade Secundária: Com fotos no topo (se não for vendida)
       const aHasPhotos = (a.imagens && a.imagens.length > 0) || (a.imagem && a.imagem !== '');
       const bHasPhotos = (b.imagens && b.imagens.length > 0) || (b.imagem && b.imagem !== '');
       
       if (aHasPhotos && !bHasPhotos) return -1;
       if (!aHasPhotos && bHasPhotos) return 1;
 
-      // 3. OrdenaÃ§Ã£o selecionada
+      // 3. Ordenação selecionada
       let comparison = 0;
       switch (sortOrder) {
         case 'Mais baratas':
@@ -2808,10 +2808,10 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         case 'Nome':
           comparison = (a.nome || '').localeCompare(b.nome || '');
           break;
-        case 'Data de CriaÃ§Ã£o':
+        case 'Data de Criação':
           comparison = new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime();
           break;
-        case 'Data de CriaÃ§Ã£o Antigo':
+        case 'Data de Criação Antigo':
           comparison = new Date(a.criado_em || 0).getTime() - new Date(b.criado_em || 0).getTime();
           break;
         case 'Ano':
@@ -2821,7 +2821,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           comparison = (a.lote || '').localeCompare(b.lote || '');
           break;
         default:
-          // Default: Recentemente adicionadas (Data de CriaÃ§Ã£o desc)
+          // Default: Recentemente adicionadas (Data de Criação desc)
           comparison = new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime();
       }
       
@@ -2848,7 +2848,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   };
 
   if (loading && items.length === 0) {
-    // NÃ£o bloquear a tela
+    // Não bloquear a tela
   }
 
   return (
@@ -2882,7 +2882,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           />
         </div>
 
-        {/* AÃ§Ãµes (Refresh, Nova Moto) */}
+        {/* Ações (Refresh, Nova Moto) */}
         <div className="flex items-center justify-end mt-1">
           <div className="flex items-center gap-2">
             {!readOnly && (
@@ -2919,7 +2919,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         <FilterModal />
       </div>
 
-      {/* Filtros e OrdenaÃ§Ã£o (Fora da div principal) */}
+      {/* Filtros e Ordenação (Fora da div principal) */}
       <div className="flex flex-col gap-4 mt-2 px-1">
         {/* Row for Brand Filter */}
         <div className="flex flex-col gap-2">
@@ -2947,8 +2947,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Ordenar por</span>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 md:mx-0 md:px-0">
             {[
-              { value: "Data de CriaÃ§Ã£o", label: "Mais recente" },
-              { value: "Data de CriaÃ§Ã£o Antigo", label: "Mais antigo" },
+              { value: "Data de Criação", label: "Mais recente" },
+              { value: "Data de Criação Antigo", label: "Mais antigo" },
               { value: "Nome", label: "Nome" },
               { value: "Mais baratas", label: "Mais baratas" },
               { value: "Mais caras", label: "Mais caras" },
@@ -2974,7 +2974,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         </div>
       </div>
 
-      {/* Filtros SecundÃ¡rios Compactos */}
+      {/* Filtros Secundários Compactos */}
       {!readOnly && (
         <div className={cn(
           "flex flex-wrap items-center gap-3 p-2 px-3 rounded-2xl border transition-all duration-300 overflow-visible",
@@ -3001,7 +3001,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Ano:</span>
             <input 
               type="number"
-              placeholder="MÃ­n"
+              placeholder="Mín"
               value={anoMinFilter}
               onChange={(e) => {
                 setAnoMinFilter(e.target.value);
@@ -3107,7 +3107,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Lote</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Valor</th>
-                  {!readOnly && <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">AÃ§Ãµes</th>}
+                  {!readOnly && <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>}
                 </tr>
               </thead>
               <tbody className={cn(
@@ -3233,7 +3233,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                           value={inlineEditData.status} 
                           onChange={(val) => setInlineEditData({...inlineEditData, status: val})}
                           options={[
-                            { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
+                            { value: 'Disponível', label: 'Disponível' },
                             { value: 'Em estoque', label: 'Em estoque' },
                             { value: 'Desmontada', label: 'Desmontada' },
                             { value: 'Vendida', label: 'Vendida' },
@@ -3349,7 +3349,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs font-bold text-zinc-400">PÃ¡gina {currentPage} de {totalPages}</span>
+            <span className="text-xs font-bold text-zinc-400">Página {currentPage} de {totalPages}</span>
             <button 
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
@@ -3387,14 +3387,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Nova Moto</h2>
-                    <p className="text-sm text-zinc-500">Adicione uma nova moto ao catÃ¡logo</p>
+                    <p className="text-sm text-zinc-500">Adicione uma nova moto ao catálogo</p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                   <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/TÃ­tulo</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/Título</label>
                     <input required type="text" value={formData.nome} onChange={(e) => setFormData({...formData, nome: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                   </div>
                   <div className="space-y-1">
@@ -3439,7 +3439,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                       value={formData.status}
                       onChange={(val) => setFormData({...formData, status: val})}
                       options={[
-                        { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
+                        { value: 'Disponível', label: 'Disponível' },
                         { value: 'Em estoque', label: 'Em estoque' },
                         { value: 'Desmontada', label: 'Desmontada' },
                         { value: 'Vendida', label: 'Vendida' },
@@ -3452,14 +3452,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§as Retiradas</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peças Retiradas</label>
                   <input type="text" value={formData.pecas_retiradas} onChange={(e) => setFormData({...formData, pecas_retiradas: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (MÃ¡x 15)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (Máx 15)</label>
                   
-                  {/* Imagens jÃ¡ salvas */}
+                  {/* Imagens já salvas */}
                   {formData.imagens.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -3493,7 +3493,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
 
-                  {/* PrÃ©-visualizaÃ§Ã£o das imagens selecionadas */}
+                  {/* Pré-visualização das imagens selecionadas */}
                   {selectedFiles.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -3531,7 +3531,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
                   
-                  {/* BotÃ£o de adicionar fotos */}
+                  {/* Botão de adicionar fotos */}
                   <div className="flex items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -3565,12 +3565,12 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-widest">
-                    Selecione imagens do seu computador (mÃ¡x 15)
+                    Selecione imagens do seu computador (máx 15)
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">DescriÃ§Ã£o</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
                   <textarea rows={3} value={formData.descricao} onChange={(e) => setFormData({...formData, descricao: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
               </div>
@@ -3630,14 +3630,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Editar Moto</h2>
-                    <p className="text-sm text-zinc-500">Atualize as informaÃ§Ãµes da moto</p>
+                    <p className="text-sm text-zinc-500">Atualize as informações da moto</p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                   <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/TÃ­tulo</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/Título</label>
                     <input required type="text" value={editFormData.nome} onChange={(e) => setEditFormData({...editFormData, nome: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                   </div>
                   <div className="space-y-1">
@@ -3682,7 +3682,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                       value={editFormData.status}
                       onChange={(val) => setEditFormData({...editFormData, status: val})}
                       options={[
-                        { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
+                        { value: 'Disponível', label: 'Disponível' },
                         { value: 'Em estoque', label: 'Em estoque' },
                         { value: 'Desmontada', label: 'Desmontada' },
                         { value: 'Vendida', label: 'Vendida' },
@@ -3695,14 +3695,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§as Retiradas</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peças Retiradas</label>
                   <input type="text" value={editFormData.pecas_retiradas} onChange={(e) => setEditFormData({...editFormData, pecas_retiradas: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (MÃ¡x 15)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (Máx 15)</label>
                   
-                  {/* Imagens jÃ¡ salvas */}
+                  {/* Imagens já salvas */}
                   {editFormData.imagens.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -3736,7 +3736,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
 
-                  {/* PrÃ©-visualizaÃ§Ã£o das imagens selecionadas */}
+                  {/* Pré-visualização das imagens selecionadas */}
                   {selectedFiles.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -3774,7 +3774,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
                   
-                  {/* BotÃ£o de adicionar fotos */}
+                  {/* Botão de adicionar fotos */}
                   <div className="flex items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -3808,12 +3808,12 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-widest">
-                    Selecione imagens do seu computador (mÃ¡x 15)
+                    Selecione imagens do seu computador (máx 15)
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">DescriÃ§Ã£o</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
                   <textarea rows={3} value={editFormData.descricao} onChange={(e) => setEditFormData({...editFormData, descricao: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
               </div>
@@ -3840,7 +3840,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     )}
                   >
                     {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                    Salvar AlteraÃ§Ãµes
+                    Salvar Alterações
                   </button>
                 </div>
               </form>
@@ -3849,7 +3849,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         )}
       </AnimatePresence>
 
-      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o */}
+      {/* Modal Confirmação Exclusão */}
       <AnimatePresence>
         {isDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -3858,7 +3858,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                 <Trash2 size={32} />
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir Moto?</h3>
-              <p className="text-zinc-500 text-sm mb-8">Esta aÃ§Ã£o nÃ£o pode ser desfeita. A moto serÃ¡ removida do Notion.</p>
+              <p className="text-zinc-500 text-sm mb-8">Esta ação não pode ser desfeita. A moto será removida do Notion.</p>
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsDeleteConfirmOpen(false)} 
@@ -3918,7 +3918,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         )}
       </AnimatePresence>
 
-      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o em Massa */}
+      {/* Modal Confirmação Exclusão em Massa */}
       <AnimatePresence>
         {isBulkDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -3927,7 +3927,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                 <Trash2 size={32} />
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir {selectedIds.length} Motos?</h3>
-              <p className="text-zinc-500 text-sm mb-8">Esta aÃ§Ã£o removerÃ¡ permanentemente todas as motos selecionadas.</p>
+              <p className="text-zinc-500 text-sm mb-8">Esta ação removerá permanentemente todas as motos selecionadas.</p>
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsBulkDeleteConfirmOpen(false)} 
@@ -3964,10 +3964,10 @@ import { Login } from './components/Login';
 
 export default function App() {
   const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); // Modificado para aceitar usuÃ¡rio Supabase
+  const [currentUser, setCurrentUser] = useState<any>(null); // Modificado para aceitar usuário Supabase
 
   useEffect(() => {
-    // Escuta mudanÃ§as de sessÃ£o baseadas no novo Custom Auth (SQLite na Vercel/Cloud Run via JWT local)
+    // Escuta mudanças de sessão baseadas no novo Custom Auth (SQLite na Vercel/Cloud Run via JWT local)
     const checkAuthStatus = () => {
       const token = localStorage.getItem('auth_token');
       const role = localStorage.getItem('user_role');
@@ -3991,7 +3991,7 @@ export default function App() {
       }
     };
 
-    // Verificar na inicializaÃ§Ã£o
+    // Verificar na inicialização
     checkAuthStatus();
 
     // Escutar eventos de login bem sucedido disparados pelo componente Login.tsx
@@ -4008,7 +4008,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      // Remover chamadas de logout do supabase, jÃ¡ que nÃ£o usamos mais o auth dele
+      // Remover chamadas de logout do supabase, já que não usamos mais o auth dele
     } catch (error) {
     }
     localStorage.removeItem('auth_token');
@@ -4266,12 +4266,12 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
                   <span className="px-3 py-1 bg-violet-500/10 text-violet-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-violet-500/20">
-                    {item.categoria || (isSale ? 'Venda' : (item.marca ? 'Moto' : 'PeÃ§a'))}
+                    {item.categoria || (isSale ? 'Venda' : (item.marca ? 'Moto' : 'Peça'))}
                   </span>
                   {(item.status || item.tipo) && (
                     <span className={cn(
                       "px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border",
-                      (item.status === 'DisponÃ­vel' || item.status === 'DISPONÃVEL' || item.status === 'Ativo' || (isSale && item.tipo !== 'SAÃDA'))
+                      (item.status === 'Disponível' || item.status === 'DISPONÍVEL' || item.status === 'Ativo' || (isSale && item.tipo !== 'SAÍDA'))
                         ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                         : "bg-rose-500/10 text-rose-500 border-rose-500/20"
                     )}>
@@ -4288,7 +4288,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
 
               <div className={cn(
                 "text-4xl md:text-5xl font-black tracking-tighter transition-all duration-500",
-                item.tipo === 'SAÃDA' ? "text-rose-500" : "text-emerald-500"
+                item.tipo === 'SAÍDA' ? "text-rose-500" : "text-emerald-500"
               )}>
                 {formatCurrency(itemValue)}
               </div>
@@ -4335,7 +4335,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
                     theme === 'dark' ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50 border-zinc-100"
                   )}>
                     <h4 className="text-[10px] font-black uppercase text-violet-400 tracking-[0.1em] flex items-center gap-2">
-                      <Wrench size={14} /> PeÃ§as Retiradas
+                      <Wrench size={14} /> Peças Retiradas
                     </h4>
                     <p className={cn("text-sm leading-relaxed", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
                       {item.pecas_retiradas}
@@ -4348,7 +4348,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
                     theme === 'dark' ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50 border-zinc-100"
                   )}>
                     <h4 className="text-[10px] font-black uppercase text-amber-400 tracking-[0.1em] flex items-center gap-2">
-                      <FileText size={14} /> ObservaÃ§Ãµes
+                      <FileText size={14} /> Observações
                     </h4>
                     <p className={cn("text-sm leading-relaxed", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
                       {item.descricao || item.observacoes}
@@ -4358,7 +4358,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
               </div>
             )}
 
-            {/* AÃ§Ãµes */}
+            {/* Ações */}
             <div className="flex flex-col gap-3 pt-4">
               <button 
                 onClick={handleWhatsAppShare}
@@ -4524,7 +4524,7 @@ const MotoCard = React.memo(({ item, theme, onSelectItem, handleEditMoto, setIte
 
   const handleMouseLeave = () => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    // Volta instantaneamente a disparar o reset, mas a transiÃ§Ã£o suave Ã© mantida pelo CSS
+    // Volta instantaneamente a disparar o reset, mas a transição suave é mantida pelo CSS
     setCurrentImageIndex(0);
   };
 
@@ -4800,7 +4800,7 @@ const LogoutModal = memo(({ isOpen, onClose, onLogout, theme }: { isOpen: boolea
           Sair da Conta?
         </h2>
         <p className="text-zinc-500 text-sm font-medium mb-8">
-          Tem certeza que deseja encerrar sua sessÃ£o atual? VocÃª precisarÃ¡ entrar novamente.
+          Tem certeza que deseja encerrar sua sessão atual? Você precisará entrar novamente.
         </p>
         <div className="flex flex-col gap-3">
           <button 
@@ -4839,7 +4839,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       return (path && ['dashboard', 'estoque', 'vendas', 'motos', 'catalogo', 'atendimento', 'frete', 'clients', 'mercadolivre', 'users', 'audit'].includes(path)) ? path as any : 'dashboard';
     }
     
-    // Se for cliente, abre sempre no catÃ¡logo
+    // Se for cliente, abre sempre no catálogo
     return 'catalogo';
   });
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
@@ -4920,7 +4920,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
 
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
-  // Atualiza a foto de perfil quando o usuÃ¡rio muda
+  // Atualiza a foto de perfil quando o usuário muda
   useEffect(() => {
     const phone = localStorage.getItem('user_phone');
     if (phone) {
@@ -4933,7 +4933,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
   useEffect(() => {
     if (!currentUser) return;
 
-    // NotificaÃ§Ãµes
+    // Notificações
     const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(20));
     const unsubscribeNotifications = onSnapshot(q, (snapshot) => {
       const newNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -4963,7 +4963,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
   }, [showAllMlAds, showPaymentFilter, isBudgetModalOpen, isLogoutModalOpen, selectedDetailItem, isAnyModalOpen]);
   const [isMlListingsLoading, setIsMlListingsLoading] = useState(false);
   
-  // Estados para filtros, ordenaÃ§Ã£o e paginaÃ§Ã£o
+  // Estados para filtros, ordenação e paginação
   const [mlSearchTerm, setMlSearchTerm] = useState('');
   const [mlSortConfig, setMlSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'criado_em', direction: 'desc' });
   const [mlCurrentPage, setMlCurrentPage] = useState(1);
@@ -5010,7 +5010,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       setUnreadCount(data.count);
     });
 
-    // A contagem agora pode vir das conversas globais, mas mantemos o fetch inicial por seguranÃ§a
+    // A contagem agora pode vir das conversas globais, mas mantemos o fetch inicial por segurança
     /*
     fetchWithRetry('/api/whatsapp/messages')
       .then(res => res.json())
@@ -5099,13 +5099,13 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
         if (data.success) {
           setProfilePhoto(data.url);
           localStorage.setItem(`profilePhoto_${phone}`, data.url);
-          console.log('âœ… Foto de perfil atualizada:', data.url);
+          console.log('✅ Foto de perfil atualizada:', data.url);
         } else {
           alert('Erro ao enviar foto: ' + data.error);
         }
       } catch (error) {
-        console.error('âŒ Erro ao enviar foto de perfil:', error);
-        alert('Erro de conexÃ£o ao enviar foto');
+        console.error('❌ Erro ao enviar foto de perfil:', error);
+        alert('Erro de conexão ao enviar foto');
       }
     }
   };
@@ -5127,7 +5127,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       setAllMlListings(data.data || []);
       setShowAllMlAds(true);
     } catch (err) {
-      console.error('Erro ao buscar todos os anÃºncios ML:', err);
+      console.error('Erro ao buscar todos os anúncios ML:', err);
     } finally {
       setIsMlListingsLoading(false);
     }
@@ -5223,7 +5223,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                   )}>
                     RK <span className="text-violet-500">SUCATAS</span>
                   </span>
-                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">GestÃ£o Inteligente</span>
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Gestão Inteligente</span>
                 </motion.div>
               )}
             </div>
@@ -5267,7 +5267,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               {(userRole === 'admin' || userRole === 'gerente') && (
                 <SidebarItem 
                   icon={UserCog} 
-                  label={isSidebarOpen ? "UsuÃ¡rios" : ""} 
+                  label={isSidebarOpen ? "Usuários" : ""} 
                   active={activeTab === 'users'} 
                   onClick={() => setActiveTab('users')} 
                   theme={theme}
@@ -5349,12 +5349,12 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                activeTab === 'vendas' ? 'Vendas' :
                activeTab === 'estoque' ? 'Estoque' :
                activeTab === 'motos' ? 'Motos' :
-               activeTab === 'catalogo' ? 'CatÃ¡logo' :
+               activeTab === 'catalogo' ? 'Catálogo' :
                activeTab === 'atendimento' ? 'Atendimento' :
                activeTab === 'clients' ? 'Clientes' :
                activeTab === 'mercadolivre' ? 'Mercado Livre' :
                activeTab === 'frete' ? 'Frete' :
-               activeTab === 'users' ? 'UsuÃ¡rios' :
+               activeTab === 'users' ? 'Usuários' :
                activeTab === 'audit' ? 'Auditoria' :
                activeTab}
             </h2>
@@ -5367,7 +5367,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                 "p-2 rounded-lg transition-all duration-300 relative",
                 theme === 'dark' ? "hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200" : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-700"
               )}
-              title="NotificaÃ§Ãµes"
+              title="Notificações"
             >
               <Bell size={20} />
               {notifications.filter(n => !n.read).length > 0 && (
@@ -5400,14 +5400,14 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               )}
             >
               <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center">
-                <h3 className="font-bold text-sm">NotificaÃ§Ãµes</h3>
+                <h3 className="font-bold text-sm">Notificações</h3>
                 <button onClick={() => setIsNotificationsOpen(false)} className="p-1 rounded-full hover:bg-zinc-800">
                   <X size={16} />
                 </button>
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-zinc-500">Nenhuma notificaÃ§Ã£o</div>
+                  <div className="p-4 text-center text-sm text-zinc-500">Nenhuma notificação</div>
                 ) : (
                   notifications.map(n => (
                     <div key={n.id} className={cn("p-4 border-b border-zinc-800/50 text-sm", !n.read && "bg-violet-500/10")}>
@@ -5496,7 +5496,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               ) : activeTab === 'clients' ? (
                 <div className={cn("p-6", theme === 'dark' ? "text-white" : "text-zinc-900")}>
                   <h2 className="text-2xl font-bold mb-4">Clientes</h2>
-                  <p>Funcionalidade de visualizaÃ§Ã£o de clientes em breve.</p>
+                  <p>Funcionalidade de visualização de clientes em breve.</p>
                 </div>
               ) : activeTab === 'mercadolivre' ? (
                 <MercadoLivre theme={theme} />
@@ -5532,7 +5532,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
         />
       )}
       
-      {/* Grupo de aÃ§Ãµes flutuantes - Only for Admin/Gerente/Estoque */}
+      {/* Grupo de ações flutuantes - Only for Admin/Gerente/Estoque */}
       {userRole !== 'client' && !isMoreMenuOpen && !isAnyModalOpen && (
         <div className="fixed bottom-24 md:bottom-8 right-6 z-[60] flex flex-col gap-3">
           <GlobalSearch 

@@ -1,10 +1,7 @@
-# Plano: Extrair DashboardView do App.tsx
+# TODO - Correção de Acentos (Continuação)
 
-## Passos
-- [x] Analisar App.tsx e identificar componentes/funções do Dashboard
-- [ ] Extrair `StatCard`, `QuestionsModal`, `DashboardView`, `formatRelativeTime` para `src/views/DashboardView.tsx`
-- [ ] Ajustar imports no novo arquivo (React, lucide, recharts, motion, utils, api, App)
-- [ ] Remover os componentes extraídos do `App.tsx`
-- [ ] Adicionar `import { DashboardView } from './views/DashboardView'` no App.tsx
-- [ ] Testar build para garantir que não há erros de import circular
+- [ ] Criar script fix_acentos3.cjs com mapeamento completo dos padrões restantes
+- [ ] Executar script em src/, middleware/, services/ e raiz
+- [ ] Verificar resultado e validar zero ocorrências restantes
+- [ ] Atualizar TODO_FIX_ACENTOS.md
 

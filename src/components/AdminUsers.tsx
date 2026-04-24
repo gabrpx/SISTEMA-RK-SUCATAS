@@ -206,7 +206,7 @@ export default function AdminUsers({ userRole, onModalChange, theme = 'dark' }: 
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente o usuário ${userName || userId}?`)) return;
+if (!window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente o usuário ${userName || userId}?`)) return;
     
     setActionLoading(userId);
     try {
@@ -327,7 +327,7 @@ export default function AdminUsers({ userRole, onModalChange, theme = 'dark' }: 
   };
 
   const handleDeleteClient = async (clientId: string, clientName: string) => {
-    if (!window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente o cliente ${clientName || clientId}?`)) return;
+if (!window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente o cliente ${clientName || clientId}?`)) return;
     
     setActionLoading(clientId);
     try {

@@ -219,7 +219,7 @@ export const Login = ({ onLogin }: LoginProps) => {
 
               <div className="flex items-center justify-between text-[8px] md:text-[10px] text-zinc-600 font-bold uppercase tracking-widest">
                 <span className="ml-[20px] md:ml-[40px]">© 2026 RK SUCATAS</span>
-                <span className="hidden md:inline">• GESTÃO PROFISSIONAL</span>
+<span className="hidden md:inline">• GESTÃO PROFISSIONAL</span>
               </div>
             </div>
           </div>

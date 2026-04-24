@@ -112,7 +112,7 @@ const StatCard = memo(({ icon: Icon, label, value, trend, subValue, color, theme
             theme === 'dark' ? "text-white" : "text-zinc-900",
             isSensitive && !showSensitiveInfo && "blur-xl select-none",
             (label.includes('Valor') || label.includes('Vendas')) && "text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.4)]",
-            label.includes('SaÃ­das') && "text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.4)]"
+            label.includes('Saídas') && "text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.4)]"
           )}>
             {displayValue}
           </h3>
@@ -186,10 +186,10 @@ const formatRelativeTime = (dateString: string) => {
 
   if (diffInDays === 0) return 'hoje';
   if (diffInDays === 1) return 'ontem';
-  if (diffInDays < 30) return `hÃ¡ ${diffInDays} dias`;
+  if (diffInDays < 30) return `há ${diffInDays} dias`;
   const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths === 1) return 'hÃ¡ 1 mÃªs';
-  return `hÃ¡ ${diffInMonths} meses`;
+  if (diffInMonths === 1) return 'há 1 mês';
+  return `há ${diffInMonths} meses`;
 };
 
 export const DashboardView = ({ 
@@ -317,7 +317,7 @@ export const DashboardView = ({
       const itemDate = parseDate(item.data);
       const isCurrentMonth = itemDate.getMonth() === mesAtual && 
                              itemDate.getFullYear() === anoAtual;
-      const isNotSaida = item.tipo !== 'SAÃDA';
+      const isNotSaida = item.tipo !== 'SAÍDA';
       return isCurrentMonth && isNotSaida;
     });
 
@@ -325,7 +325,7 @@ export const DashboardView = ({
       const itemDate = parseDate(item.data);
       const isCurrentMonth = itemDate.getMonth() === mesAtual && 
                              itemDate.getFullYear() === anoAtual;
-      const isSaida = item.tipo === 'SAÃDA';
+      const isSaida = item.tipo === 'SAÍDA';
       return isCurrentMonth && isSaida;
     });
 
@@ -333,7 +333,7 @@ export const DashboardView = ({
     const valorSaidasMes = saidasMes.reduce((sum, v) => sum + parseValue(v.valor), 0);
     const ticketMedio = vendasMes.length > 0 ? valorVendasMes / vendasMes.length : 0;
 
-    console.log('ðŸ“Š Dashboard Metrics Debug:', {
+    console.log('📊 Dashboard Metrics Debug:', {
       inventoryCount: inventory.length,
       salesCount: sales.length,
       vendasMesCount: vendasMes.length,
@@ -368,7 +368,7 @@ export const DashboardView = ({
       const isCancelled = sale.is_cancelled || sale.status === 'cancelled' || sale.shipping_status?.startsWith('cancelled') || sale.shipping_substatus === 'cancelled' || sale.shipping_substatus === 'not_delivered';
       
       if (mlSalesSubTab === 'pending') {
-        // Vendas pendentes: prontas para imprimir etiqueta, etiqueta jÃ¡ impressa ou aguardando NF
+        // Vendas pendentes: prontas para imprimir etiqueta, etiqueta já impressa ou aguardando NF
         return !sale.has_dispute && !isCancelled && (sale.shipping_status?.startsWith('ready_to_ship') || sale.shipping_status === 'pending' || sale.shipping_status?.includes('ready_to_print') || sale.shipping_status?.includes('printed') || sale.shipping_status?.includes('invoice_pending'));
       }
       if (mlSalesSubTab === 'dispute') return sale.has_dispute;
@@ -380,7 +380,7 @@ export const DashboardView = ({
     });
   }, [metrics.ultimasVendas, mlSalesSubTab, source]);
 
-  // GrÃ¡fico Vendas por Dia (Ãºltimos 30 dias)
+  // Gráfico Vendas por Dia (últimos 30 dias)
   const chartData = useMemo(() => {
     if (source === 'mercadolivre' && mlData?.chartData) {
       return mlData.chartData;
@@ -411,7 +411,7 @@ export const DashboardView = ({
       const saleDate = `${saleDateObj.getFullYear()}-${String(saleDateObj.getMonth() + 1).padStart(2, '0')}-${String(saleDateObj.getDate()).padStart(2, '0')}`;
       const day = days.find(d => d.date === saleDate);
       if (day) {
-        if (sale.tipo === 'SAÃDA') {
+        if (sale.tipo === 'SAÍDA') {
           day.saidas += Number(sale.valor) || 0;
         } else {
           day.vendas += Number(sale.valor) || 0;
@@ -422,10 +422,10 @@ export const DashboardView = ({
     return days;
   }, [sales, mlData, source]);
 
-  // GrÃ¡fico Vendas por Tipo (Valor)
+  // Gráfico Vendas por Tipo (Valor)
   const pieData = useMemo(() => {
     const types: Record<string, number> = {};
-    sales.filter(s => s.tipo !== 'SAÃDA').forEach(sale => {
+    sales.filter(s => s.tipo !== 'SAÍDA').forEach(sale => {
       types[sale.tipo] = (types[sale.tipo] || 0) + sale.valor;
     });
     return Object.entries(types).map(([name, value]) => ({ name, value }));
@@ -442,15 +442,15 @@ export const DashboardView = ({
   }, [sales, selectedPaymentType]);
 
   if (loading && inventory.length === 0 && sales.length === 0) {
-    // Retornar null ou nÃ£o bloquear a tela para que inicie direto
-    // Apenas mostrar um indicador sutil se necessÃ¡rio
+    // Retornar null ou não bloquear a tela para que inicie direto
+    // Apenas mostrar um indicador sutil se necessário
   }
 
   return (
     <>
       <div className={cn("space-y-6", isSearchOpen && "blur-md pointer-events-none")}>
       <div className="space-y-4 mb-6">
-        {/* Linha 1: TÃ­tulo e AÃ§Ãµes Principais */}
+        {/* Linha 1: Título e Ações Principais */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center justify-between w-full sm:w-auto">
             <h2 className={cn("text-2xl sm:text-3xl font-black tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
@@ -458,7 +458,7 @@ export const DashboardView = ({
             </h2>
 
             <div className="flex sm:hidden items-center gap-2">
-              {/* Toggle de InformaÃ§Ãµes SensÃ­veis (Mobile) */}
+              {/* Toggle de Informações Sensíveis (Mobile) */}
               <button
                 onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
                 className={cn(
@@ -471,7 +471,7 @@ export const DashboardView = ({
                 {showSensitiveInfo ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
 
-              {/* BotÃ£o de Sincronizar (Mobile) */}
+              {/* Botão de Sincronizar (Mobile) */}
               <button 
                 onClick={() => {
                   refreshData();
@@ -494,7 +494,7 @@ export const DashboardView = ({
           
           <div className="hidden sm:flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
             <div className="flex items-center gap-2">
-              {/* Toggle de InformaÃ§Ãµes SensÃ­veis */}
+              {/* Toggle de Informações Sensíveis */}
               <button
                 onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
                 className={cn(
@@ -503,12 +503,12 @@ export const DashboardView = ({
                     ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
                     : "bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
                 )}
-                title={showSensitiveInfo ? "Ocultar SensÃ­veis" : "Mostrar SensÃ­veis"}
+                title={showSensitiveInfo ? "Ocultar Sensíveis" : "Mostrar Sensíveis"}
               >
                 {showSensitiveInfo ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
 
-              {/* BotÃ£o de Sincronizar */}
+              {/* Botão de Sincronizar */}
               <button 
                 onClick={() => {
                   refreshData();
@@ -530,7 +530,7 @@ export const DashboardView = ({
                 <span className="hidden sm:inline">Sincronizar</span>
               </button>
 
-              {/* Filtro de PerÃ­odo (apenas para Mercado Livre) */}
+              {/* Filtro de Período (apenas para Mercado Livre) */}
               {source === 'mercadolivre' && (
                 <div className="relative">
                   <button
@@ -546,7 +546,7 @@ export const DashboardView = ({
                         ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
                         : "bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
                     )}
-                    title="Filtro de PerÃ­odo"
+                    title="Filtro de Período"
                   >
                     <Calendar size={18} />
                     {mlPeriod !== '30d' && (
@@ -561,14 +561,14 @@ export const DashboardView = ({
                       theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                     )}
                   >
-                    <h4 className={cn("text-xs font-bold uppercase tracking-wider mb-2 px-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>PerÃ­odo</h4>
+                    <h4 className={cn("text-xs font-bold uppercase tracking-wider mb-2 px-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>Período</h4>
                     <div className="space-y-1 mb-3">
                       {[
-                        { value: '7d', label: 'Ãšltimos 7 dias' },
-                        { value: '15d', label: 'Ãšltimos 15 dias' },
-                        { value: '30d', label: 'Ãšltimos 30 dias' },
-                        { value: '60d', label: 'Ãšltimos 60 dias' },
-                        { value: 'custom', label: 'Data EspecÃ­fica' },
+                        { value: '7d', label: 'Últimos 7 dias' },
+                        { value: '15d', label: 'Últimos 15 dias' },
+                        { value: '30d', label: 'Últimos 30 dias' },
+                        { value: '60d', label: 'Últimos 60 dias' },
+                        { value: 'custom', label: 'Data Específica' },
                       ].map(option => (
                         <button
                           key={option.value}
@@ -593,7 +593,7 @@ export const DashboardView = ({
                     {mlPeriod === 'custom' && (
                       <div className={cn("space-y-2 pt-2 border-t", theme === 'dark' ? "border-zinc-800" : "border-zinc-200")}>
                         <div>
-                          <label className={cn("block text-[10px] font-bold uppercase mb-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>InÃ­cio</label>
+                          <label className={cn("block text-[10px] font-bold uppercase mb-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>Início</label>
                           <input
                             type="date"
                             value={mlCustomDate.start}
@@ -635,7 +635,7 @@ export const DashboardView = ({
           </div>
         </div>
 
-      {/* Grid de MÃ©tricas Principais */}
+      {/* Grid de Métricas Principais */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 px-4 sm:px-0">
         {source === 'estoque' ? (
           <>
@@ -650,15 +650,15 @@ export const DashboardView = ({
             />
             <StatCard 
               icon={TrendingUp} 
-              label="Vendas (MÃªs)" 
+              label="Vendas (Mês)" 
               value={metrics.valorVendasMes} 
-              subValue={`${metrics.totalVendasMes} vendas no mÃªs`}
+              subValue={`${metrics.totalVendasMes} vendas no mês`}
               color="bg-teal-500" 
               theme={theme}
               isSensitive={true}
             />
             
-            {/* GrÃ¡fico Estiloso que ocupa o espaÃ§o de 2 cards */}
+            {/* Gráfico Estiloso que ocupa o espaço de 2 cards */}
             <div className={cn(
               "col-span-2 border rounded-2xl p-5 transition-all duration-300 relative overflow-hidden flex flex-col h-full",
               theme === 'dark' 
@@ -721,7 +721,7 @@ export const DashboardView = ({
 
             <StatCard 
               icon={DollarSign} 
-              label="SaÃ­das (MÃªs)" 
+              label="Saídas (Mês)" 
               value={metrics.valorSaidasMes} 
               subValue="despesas operacionais"
               color="bg-rose-400" 
@@ -730,7 +730,7 @@ export const DashboardView = ({
             />
             <StatCard 
               icon={ShoppingCart} 
-              label="Ticket MÃ©dio" 
+              label="Ticket Médio" 
               value={metrics.ticketMedio} 
               subValue="por venda realizada"
               color="bg-amber-400" 
@@ -742,9 +742,9 @@ export const DashboardView = ({
           <>
     <StatCard 
       icon={Box} 
-      label="AnÃºncios Ativos" 
+      label="Anúncios Ativos" 
       value={metrics.activeListings} 
-      subValue={`De ${metrics.totalItensEstoque} anÃºncios totais`}
+      subValue={`De ${metrics.totalItensEstoque} anúncios totais`}
       color="bg-indigo-500" 
       theme={theme} 
       onClick={onFetchAllMlListings}
@@ -752,9 +752,9 @@ export const DashboardView = ({
     />
     <StatCard 
       icon={BarChart3} 
-      label="Vendas ML (MÃªs)" 
+      label="Vendas ML (Mês)" 
       value={metrics.valorVendasMes} 
-      subValue={`${metrics.totalVendasMes} pedidos no perÃ­odo`}
+      subValue={`${metrics.totalVendasMes} pedidos no período`}
       color="bg-teal-500" 
       theme={theme} 
       isSensitive={true}
@@ -835,7 +835,7 @@ export const DashboardView = ({
                 />
                 <Area type="monotone" dataKey="vendas" name="Vendas" stroke={source === 'estoque' ? "#8b5cf6" : "#10b981"} strokeWidth={3} fillOpacity={1} fill="url(#colorVendas)" />
                 {source === 'estoque' && (
-                  <Area type="monotone" dataKey="saidas" name="SaÃ­das" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorSaidas)" />
+                  <Area type="monotone" dataKey="saidas" name="Saídas" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorSaidas)" />
                 )}
               </AreaChart>
             </ResponsiveContainer>
@@ -885,11 +885,11 @@ export const DashboardView = ({
               </ResponsiveContainer>
             </div>
             <p className="text-[8px] text-center text-zinc-500 font-black uppercase tracking-[0.3em] mt-4">
-              Ãšltimos 15 dias
+              Últimos 15 dias
             </p>
           </div>
 
-        {/* GrÃ¡fico SecundÃ¡rio / AÃ§Ãµes RÃ¡pidas */}
+        {/* Gráfico Secundário / Ações Rápidas */}
         <div className="space-y-6">
           <div className={cn(
             "border p-6 rounded-2xl transition-all duration-300",
@@ -898,7 +898,7 @@ export const DashboardView = ({
               : "bg-white border-zinc-200 shadow-sm"
           )}>
             <h3 className={cn("text-lg font-bold tracking-tight mb-6", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Vendas por Tipo" : "Status de AnÃºncios"}
+              {source === 'estoque' ? "Vendas por Tipo" : "Status de Anúncios"}
             </h3>
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -958,7 +958,7 @@ export const DashboardView = ({
             </div>
           </div>
 
-          {/* AÃ§Ãµes RÃ¡pidas ML */}
+          {/* Ações Rápidas ML */}
           {source === 'mercadolivre' && (
             <div className={cn(
               "border p-6 rounded-2xl transition-all duration-300",
@@ -967,7 +967,7 @@ export const DashboardView = ({
                 : "bg-white border-zinc-200 shadow-sm"
             )}>
               <h3 className={cn("text-sm font-bold tracking-tight mb-4 uppercase text-zinc-500", theme === 'dark' ? "text-zinc-400" : "text-zinc-500")}>
-                AÃ§Ãµes RÃ¡pidas ML
+                Ações Rápidas ML
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 <button 
@@ -982,13 +982,13 @@ export const DashboardView = ({
                   className="flex flex-col items-center gap-2 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all group"
                 >
                   <Package className="text-amber-500 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">AnÃºncios</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Anúncios</span>
                 </button>
               </div>
             </div>
           )}
         </div>
-        {/* Ãšltimas Vendas / Pedidos ML */}
+        {/* Últimas Vendas / Pedidos ML */}
         <div id="vendas-section" className={cn(
           "lg:col-span-3 border rounded-2xl overflow-hidden transition-all duration-300 mt-6",
           theme === 'dark' 
@@ -1000,7 +1000,7 @@ export const DashboardView = ({
             theme === 'dark' ? "border-zinc-800/50" : "border-zinc-100"
           )}>
             <h3 className={cn("font-bold tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Ãšltimas Vendas" : "Vendas (Mercado Livre)"}
+              {source === 'estoque' ? "Últimas Vendas" : "Vendas (Mercado Livre)"}
             </h3>
             
             <div className="flex items-center gap-2">
@@ -1030,7 +1030,7 @@ export const DashboardView = ({
                           theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                         )}
                       >
-                        {['TODOS', 'CRÃ‰DITO', 'DÃ‰BITO', 'DINHEIRO', 'MARCELO', 'PENDÃŠNCIA', 'PIX'].map((type) => (
+                        {['TODOS', 'CRÉDITO', 'DÉBITO', 'DINHEIRO', 'MARCELO', 'PENDÊNCIA', 'PIX'].map((type) => (
                           <button
                             key={type}
                             onClick={() => {
@@ -1067,7 +1067,7 @@ export const DashboardView = ({
                     "text-[10px] uppercase font-bold tracking-wider",
                     theme === 'dark' ? "bg-zinc-800/30 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                   )}>
-                    <th className="px-4 py-3">PeÃ§a</th>
+                    <th className="px-4 py-3">Peça</th>
                     <th className="px-4 py-3">Valor</th>
                     <th className="px-4 py-3">Tipo</th>
                     <th className="px-4 py-3">Data</th>
@@ -1100,8 +1100,8 @@ export const DashboardView = ({
                           "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
                           sale.tipo?.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
                           sale.tipo?.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                          sale.tipo?.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                          sale.tipo?.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                          sale.tipo?.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                          sale.tipo?.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                           sale.tipo?.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                           sale.tipo?.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                           (theme === 'dark' ? "bg-zinc-800 text-zinc-400 border-zinc-700/50" : "bg-zinc-100 text-zinc-600")
@@ -1125,7 +1125,7 @@ export const DashboardView = ({
               {/* Mobile Cards */}
               <div className="md:hidden flex flex-col max-h-[500px] overflow-y-auto scrollbar-hide divide-y divide-zinc-800/10 px-8">
                 {filteredLastSales.slice(0, 10).map((sale: any) => {
-                  const isSaida = sale.tipo === 'SAÃDA';
+                  const isSaida = sale.tipo === 'SAÍDA';
                   return (
                     <div 
                       key={sale.id}
@@ -1164,8 +1164,8 @@ export const DashboardView = ({
                             : (
                               sale.tipo?.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
                               sale.tipo?.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                              sale.tipo?.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                              sale.tipo?.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                              sale.tipo?.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                              sale.tipo?.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                               sale.tipo?.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                               sale.tipo?.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                               (theme === 'dark' ? "bg-zinc-800 text-zinc-500 border border-zinc-700" : "bg-zinc-100 text-zinc-400 border border-zinc-200")
@@ -1223,7 +1223,7 @@ export const DashboardView = ({
                         : (theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800/50" : "text-zinc-500 hover:bg-zinc-50")
                     )}
                   >
-                    MediaÃ§Ãµes
+                    Mediações
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
                       mlSalesSubTab === 'dispute' ? "bg-red-500 text-white" : (theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-200 text-zinc-400")
@@ -1242,7 +1242,7 @@ export const DashboardView = ({
                       : (theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800/50" : "text-zinc-500 hover:bg-zinc-50")
                   )}
                 >
-                  Em trÃ¢nsito
+                  Em trânsito
                   <span className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
                     mlSalesSubTab === 'shipped' ? "bg-violet-500 text-white" : (theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-200 text-zinc-400")
@@ -1316,10 +1316,10 @@ export const DashboardView = ({
                   }
                   if (sale.has_dispute) {
                     return {
-                      title: 'MediaÃ§Ã£o em curso',
+                      title: 'Mediação em curso',
                       titleColor: 'text-red-500',
-                      description: 'Responda Ã  mediaÃ§Ã£o para prosseguir com a venda.',
-                      buttonText: 'Responder mediaÃ§Ã£o',
+                      description: 'Responda à mediação para prosseguir com a venda.',
+                      buttonText: 'Responder mediação',
                       buttonAction: 'dispute'
                     };
                   }
@@ -1328,14 +1328,14 @@ export const DashboardView = ({
                       return {
                         title: 'Pronta para gerar etiqueta',
                         titleColor: 'text-orange-500',
-                        description: 'VocÃª deve despachar o pacote hoje ou amanhÃ£ em Correios.',
+                        description: 'Você deve despachar o pacote hoje ou amanhã em Correios.',
                         buttonText: 'GERAR ETIQUETA',
                         buttonAction: 'print'
                       };
                     }
                     if (sale.shipping_status.includes('printed') || sale.shipping_substatus === 'printed') {
                       return {
-                        title: 'Etiqueta jÃ¡ impressa',
+                        title: 'Etiqueta já impressa',
                         titleColor: 'text-blue-500',
                         description: 'Aguardar coleta ou despachar o pacote.',
                         buttonText: 'Reimprimir etiqueta',
@@ -1355,16 +1355,16 @@ export const DashboardView = ({
                     return {
                       title: 'Pronta para envio',
                       titleColor: 'text-orange-500',
-                      description: 'VocÃª deve despachar o pacote.',
+                      description: 'Você deve despachar o pacote.',
                       buttonText: 'GERAR ETIQUETA',
                       buttonAction: 'print'
                     };
                   }
                   if (sale.shipping_status === 'shipped') {
                     return {
-                      title: 'Em trÃ¢nsito',
+                      title: 'Em trânsito',
                       titleColor: 'text-violet-500',
-                      description: 'O pacote estÃ¡ a caminho do comprador.',
+                      description: 'O pacote está a caminho do comprador.',
                       buttonText: 'Acompanhar envio',
                       buttonAction: 'track'
                     };
@@ -1382,7 +1382,7 @@ export const DashboardView = ({
                     return {
                       title: 'Envio pendente',
                       titleColor: 'text-amber-500',
-                      description: 'Aguardando liberaÃ§Ã£o da etiqueta.',
+                      description: 'Aguardando liberação da etiqueta.',
                       buttonText: 'Ver detalhes',
                       buttonAction: 'view'
                     };
@@ -1399,7 +1399,7 @@ export const DashboardView = ({
                   return {
                     title: sale.status === 'Pago' ? 'Pagamento aprovado' : sale.status,
                     titleColor: 'text-zinc-500',
-                    description: 'Aguardando atualizaÃ§Ã£o de envio.',
+                    description: 'Aguardando atualização de envio.',
                     buttonText: 'Ver detalhes',
                     buttonAction: 'view'
                   };
@@ -1439,7 +1439,7 @@ export const DashboardView = ({
                     </div>
                   </div>
 
-                  {/* AÃ§Ã£o Principal e Detalhes */}
+                  {/* Ação Principal e Detalhes */}
                   <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/5">
                     <div className="flex flex-col gap-0.5">
                       <span className={cn("font-bold text-sm", statusInfo.titleColor)}>{statusInfo.title}</span>
@@ -1449,7 +1449,7 @@ export const DashboardView = ({
                       <button 
                         onClick={async () => {
                           if (!sale.shipping_id) {
-                            alert('ID de envio nÃ£o encontrado para este pedido.');
+                            alert('ID de envio não encontrado para este pedido.');
                             return;
                           }
                           try {
@@ -1481,7 +1481,7 @@ export const DashboardView = ({
                             window.URL.revokeObjectURL(url);
                           } catch (err) {
                             console.error('Erro ao baixar etiqueta:', err);
-                            alert('Erro ao baixar etiqueta. Verifique se o pedido jÃ¡ possui etiqueta gerada.');
+                            alert('Erro ao baixar etiqueta. Verifique se o pedido já possui etiqueta gerada.');
                           }
                         }}
                         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
@@ -1555,7 +1555,7 @@ export const DashboardView = ({
           }
         </div>
 
-        {/* Ãšltimos Itens / AnÃºncios Recentes ML */}
+        {/* Últimos Itens / Anúncios Recentes ML */}
         <div className={cn(
           "lg:col-span-3 border rounded-2xl overflow-hidden transition-all duration-300 mt-6",
           theme === 'dark' 
@@ -1567,7 +1567,7 @@ export const DashboardView = ({
             theme === 'dark' ? "border-zinc-800/50" : "border-zinc-100"
           )}>
             <h3 className={cn("font-bold tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Ãšltimos itens adicionados" : "AnÃºncios Recentes ML"}
+              {source === 'estoque' ? "Últimos itens adicionados" : "Anúncios Recentes ML"}
             </h3>
             <Package size={16} className="text-violet-500" />
           </div>
@@ -1579,7 +1579,7 @@ export const DashboardView = ({
                   "text-[10px] uppercase font-bold tracking-wider",
                   theme === 'dark' ? "bg-zinc-800/30 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                 )}>
-                  <th className="px-4 py-3">{source === 'estoque' ? "PeÃ§a" : "AnÃºncio"}</th>
+                  <th className="px-4 py-3">{source === 'estoque' ? "Peça" : "Anúncio"}</th>
                   <th className="px-4 py-3 text-center">{source === 'estoque' ? "Qtd" : "Vendas"}</th>
                   <th className="px-4 py-3">{source === 'estoque' ? "Moto" : "Status"}</th>
                   {source === 'mercadolivre' && <th className="px-4 py-3">Criado em</th>}
@@ -1688,7 +1688,7 @@ export const DashboardView = ({
         </div>
       </div>
       
-      {/* Modal de TransaÃ§Ãµes por Tipo */}
+      {/* Modal de Transações por Tipo */}
       <AnimatePresence>
         {selectedPaymentType && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1705,7 +1705,7 @@ export const DashboardView = ({
                 <div className="flex-1">
                   <h3 className="text-xl font-bold text-white flex items-center gap-3">
                     <History className="text-violet-500" />
-                    TransaÃ§Ãµes: {selectedPaymentType}
+                    Transações: {selectedPaymentType}
                   </h3>
                   <p className="text-zinc-500 text-sm mt-1">
                     Total de {filteredSalesByType.length} registros encontrados
@@ -1734,7 +1734,7 @@ export const DashboardView = ({
                       "text-[10px] uppercase font-bold tracking-wider",
                       theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                     )}>
-                      <th className="px-6 py-4 border-b border-zinc-800/50">Item / DescriÃ§Ã£o</th>
+                      <th className="px-6 py-4 border-b border-zinc-800/50">Item / Descrição</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">Valor</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">Data</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">RK ID</th>
@@ -1776,7 +1776,7 @@ export const DashboardView = ({
                     ) : (
                       <tr>
                         <td colSpan={4} className="px-6 py-12 text-center text-zinc-500">
-                          Nenhuma transaÃ§Ã£o encontrada para este tipo.
+                          Nenhuma transação encontrada para este tipo.
                         </td>
                       </tr>
                     )}
@@ -1797,7 +1797,7 @@ export const DashboardView = ({
         )}
       </AnimatePresence>
 
-      {/* Modal de Todos os AnÃºncios ML */}
+      {/* Modal de Todos os Anúncios ML */}
       <AnimatePresence>
         {showAllMlAds && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1814,7 +1814,7 @@ export const DashboardView = ({
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-white flex items-center gap-3">
                     <Package className="text-amber-500" />
-                    AnÃºncios Ativos
+                    Anúncios Ativos
                   </h3>
                   <button 
                     onClick={() => setShowAllMlAds(false)}
@@ -1825,7 +1825,7 @@ export const DashboardView = ({
                 </div>
                 <input 
                   type="text"
-                  placeholder="Buscar peÃ§a ou moto..."
+                  placeholder="Buscar peça ou moto..."
                   value={mlSearchTerm}
                   onChange={(e) => { setMlSearchTerm(e.target.value); setMlCurrentPage(1); }}
                   className="w-full px-4 py-3 rounded-xl bg-zinc-800 text-white text-sm border border-zinc-700 focus:outline-none focus:border-amber-500"
@@ -1836,7 +1836,7 @@ export const DashboardView = ({
                 {isMlListingsLoading ? (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <Loader2 className="animate-spin text-amber-500" size={40} />
-                    <p className="text-zinc-500 font-bold animate-pulse">Buscando anÃºncios...</p>
+                    <p className="text-zinc-500 font-bold animate-pulse">Buscando anúncios...</p>
                   </div>
                 ) : (
                   <>
@@ -1844,7 +1844,7 @@ export const DashboardView = ({
                     <div className="md:hidden p-4 space-y-3">
                       {paginatedMlListings.map((item) => {
                         // Heuristic: extract moto name from title
-                        // Assuming title format: "PeÃ§a Moto" or "PeÃ§a (Moto)"
+                        // Assuming title format: "Peça Moto" or "Peça (Moto)"
                         const title = item.titulo || item.id;
                         const parts = title.split(/\s\(/)[0].split(/\s/);
                         const motoName = parts.slice(-2).join(' ');
@@ -1882,10 +1882,10 @@ export const DashboardView = ({
                         "text-[10px] uppercase font-bold tracking-wider",
                         theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                       )}>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('titulo')}>AnÃºncio {mlSortConfig.key === 'titulo' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('preco')}>PreÃ§o {mlSortConfig.key === 'preco' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 text-center cursor-pointer" onClick={() => toggleMlSort('estoque')}>Estoque {mlSortConfig.key === 'estoque' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('criado_em')}>Data {mlSortConfig.key === 'criado_em' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('titulo')}>Anúncio {mlSortConfig.key === 'titulo' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('preco')}>Preço {mlSortConfig.key === 'preco' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 text-center cursor-pointer" onClick={() => toggleMlSort('estoque')}>Estoque {mlSortConfig.key === 'estoque' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('criado_em')}>Data {mlSortConfig.key === 'criado_em' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                         <th className="px-6 py-4 border-b border-zinc-800/50">Status</th>
                       </tr>
                     </thead>
@@ -1938,7 +1938,7 @@ export const DashboardView = ({
               </div>
               
               <div className="p-4 border-t border-zinc-800/50 bg-zinc-900/30 flex justify-between items-center">
-                <span className="text-sm text-zinc-500">PÃ¡gina {mlCurrentPage} de {mlTotalPages || 1}</span>
+                <span className="text-sm text-zinc-500">Página {mlCurrentPage} de {mlTotalPages || 1}</span>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setMlCurrentPage(p => Math.max(1, p - 1))}
@@ -1952,7 +1952,7 @@ export const DashboardView = ({
                     disabled={mlCurrentPage >= mlTotalPages}
                     className="px-4 py-2 rounded-xl bg-zinc-800 text-white font-bold hover:bg-zinc-700 transition-all disabled:opacity-50"
                   >
-                    PrÃ³ximo
+                    Próximo
                   </button>
                 </div>
               </div>

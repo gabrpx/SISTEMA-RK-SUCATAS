@@ -968,8 +968,8 @@ async function startServer() {
     }
   });
 
-    // ==================== BUSCA DE PREÇO PARA EXTENSÃO WHATSAPP ====================
-// ==================== BUSCA DE PREÇO PARA EXTENSÃO WHATSAPP ====================
+    // ==================== BUSCA DE PREÇO PARA EXTENSàO WHATSAPP ====================
+// ==================== BUSCA DE PREÇO PARA EXTENSàO WHATSAPP ====================
 app.get('/api/peca/preco', async (req, res) => {
   try {
     const { termo } = req.query;
@@ -3617,7 +3617,7 @@ function formatInventoryItem(page: any) {
     }
   });
 
-  // ==================== WHATSAPP INTEGRATION (VERSÃO ULTRA ESTÁVEL 2026) ====================
+  // ==================== WHATSAPP INTEGRATION (VERSàO ULTRA ESTÁVEL 2026) ====================
   const BAILEY_CONFIG = {
     connectTimeoutMs: 120000,           // mais tolerante
     defaultQueryTimeoutMs: 60000,

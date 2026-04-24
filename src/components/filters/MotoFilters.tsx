@@ -242,7 +242,7 @@ export function MotoFilters({
       </div>
 
       {/* ========================================== */}
-      {/* ORDENAÇÃO (Botões) */}
+{/* ORDENAÇÃO (Botões) */}
       {/* ========================================== */}
       <div className="flex flex-col gap-2">
         <span className={cn(
