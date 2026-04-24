@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, Package, ShoppingCart, Bike, Tag, Layers } from 'lucide-react';
 import { DataContext } from '../App';
-import { cn, formatDateRelative } from '../utils';
+import { cn, formatDateRelative, parseLocalDate } from '../utils';
 
 interface GlobalSearchProps {
   theme: 'light' | 'dark';
@@ -196,7 +196,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ theme, onSelectItem,
     sales.forEach(sale => {
       if (!sale.tipo) return;
       
-      const saleDate = new Date(sale.data);
+      const saleDate = parseLocalDate(sale.data);
       const isSameMonth = saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear;
       
       const normalizedTipo = normalizarTexto(sale.tipo);

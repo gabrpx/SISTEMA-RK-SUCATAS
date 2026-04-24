@@ -553,10 +553,28 @@ async function startServer() {
         estoque: Number(item.estoque) || 0
       }));
 
+      // fallback para Notion se Supabase estiver vazio (migração pendente)
+      if (mappedData.length === 0) {
+        console.log("⚠️ Supabase vazio. Buscando fallback no Notion...");
+        const notionItems = await fetchAllFromNotion(DATABASE_ID);
+        const formatted = notionItems.map(formatInventoryItem);
+        console.log(`✅ Fallback Notion: ${formatted.length} produtos carregados.`);
+        return res.json({ success: true, data: formatted });
+      }
+
       res.json({ success: true, data: mappedData });
     } catch (error: any) {
       console.error("🔥 Critical Supabase Get Produtos Error:", error.message || error);
-      res.status(500).json({ success: false, error: error.message || "Erro interno no servidor de produtos" });
+      // fallback para Notion em caso de erro crítico no Supabase
+      try {
+        console.log("🔄 Fallback de emergência para Notion...");
+        const notionItems = await fetchAllFromNotion(DATABASE_ID);
+        const formatted = notionItems.map(formatInventoryItem);
+        return res.json({ success: true, data: formatted, warning: 'Usando dados do Notion (Supabase indisponível)' });
+      } catch (notionErr: any) {
+        console.error("❌ Fallback Notion também falhou:", notionErr.message);
+        res.status(500).json({ success: false, error: error.message || "Erro interno no servidor de produtos" });
+      }
     }
   });
 
@@ -761,7 +779,7 @@ async function startServer() {
         moto: moto || "-",
         valor: Number(valor) || 0,
         pagamento: pagamento || tipo || "Pix",
-        data: data || new Date().toISOString().split('T')[0],
+        data: data || new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
         observacoes: observacoes || "",
         criado_em: new Date().toISOString(),
         atualizado_em: new Date().toISOString()

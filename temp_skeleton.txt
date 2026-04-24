@@ -1,0 +1,28 @@
+
+const SkeletonRow = memo(({ theme }: { theme: 'light' | 'dark', key?: any }) => (
+  <tr className="animate-pulse transform-gpu">
+    <td className="px-6 py-4"><div className={cn("h-4 rounded w-16", theme === 'dark' ? "bg-zinc-800" : "bg-zinc-200")}></div></td>
+    <td className="px-6 py-4"><div className={cn("h-4 rounded w-48", theme === 'dark' ? "bg-zinc-800" : "bg-zinc-200")}></div></td>
+    <td className="px-6 py-4"><div className={cn("h-4 rounded w-32", theme === 'dark' ? "bg-zinc-800" : "bg-zinc-200")}></div></td>
+    <td className="px-6 py-4"><div className={cn("h-4 rounded w-24", theme === 'dark' ? "bg-zinc-800" : "bg-zinc-200")}></div></td>
+    <td className="px-6 py-4"><div className={cn("h-4 rounded w-20", theme === 'dark' ? "bg-zinc-800" : "bg-zinc-200")}></div></td>
+  </tr>
+));
+
+const StatCard = memo(({ icon: Icon, label, value, trend, subValue, color, theme, onClick, isSensitive, isCurrency = true }: any) => {
+  const context = useContext(DataContext);
+  const showSensitiveInfo = context?.showSensitiveInfo ?? true;
+  
+  const formatValue = (val: any) => {
+    if (!isCurrency) return val;
+    if (typeof val === 'string' && val.includes('R$')) return val;
+    const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^\d,-]/g, '').replace(',', '.'));
+    if (isNaN(num)) return val;
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(num);
+  };
+
+  const displayValue = formatValue(value);
+  const displayTrend = (trend === null || trend === undefined || isNaN(Number(trend))) ? null : Number(trend);

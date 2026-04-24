@@ -1,13 +1,32 @@
+﻿// ============================================
+// APP.TSX â€” Componente raiz da aplicaÃ§Ã£o RK Sucatas
+// ============================================
+// ResponsÃ¡vel por:
+// - Contexto global de dados (estoque, vendas, motos)
+// - Layout principal (sidebar, header, navegaÃ§Ã£o)
+// - Views: Dashboard, Estoque, Vendas, Motos, Config, etc.
+// ============================================
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// ============================================
+// IMPORTS DO REACT
+// ============================================
+// Hooks e utilidades principais usados em todo o arquivo
+// ============================================
 import React, { useState, useEffect, useMemo, useContext, createContext, useRef, useCallback, memo } from 'react';
+// ============================================
+// IMPORTS DO FIREBASE E COMPONENTES INTERNOS
+// ============================================
+// db: instÃ¢ncia do Firestore para notificaÃ§Ãµes em tempo real
+// query, collection, etc: utilitÃ¡rios de consulta do Firestore
+// QuestionsDashboard, AdminUsers, AuditLogs: componentes de funcionalidades especÃ­ficas
+// ============================================
 import { db } from './firebase'; // keeping only what is necessary, if any
-import { doc, getDoc, setDoc, query, collection, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { supabase } from './utils/supabase';
-import { api } from './utils/api';
+import { query, collection, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import QuestionsDashboard from './components/QuestionsDashboard';
 import AdminUsers from './components/AdminUsers';
 import AuditLogs from './components/AuditLogs';
@@ -87,7 +106,7 @@ import {
   Cell
 } from 'recharts';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
-import { cn } from './utils';
+import { cn, parseLocalDate } from './utils';
 import { BudgetModal } from './components/BudgetModal';
 import { GlobalSearch } from './components/GlobalSearch';
 import { CustomDropdown } from './components/CustomDropdown';
@@ -101,6 +120,7 @@ import { io } from 'socket.io-client';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Capacitor } from '@capacitor/core';
 import { StockFilters } from './components/filters';
+import { InventoryView } from './views/InventoryView';
 
 const modelosMotos = MOTOS_OFICIAIS;
 const modelosUnicos = MOTOS_OFICIAIS;
@@ -123,8 +143,8 @@ const parseJson = async (res: Response) => {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.error(`❌ Erro ao parsear JSON de ${res.url}. Conteúdo recebido:`, text.substring(0, 200));
-    throw new Error(`Resposta inválida de ${res.url}`);
+    console.error(`âŒ Erro ao parsear JSON de ${res.url}. ConteÃºdo recebido:`, text.substring(0, 200));
+    throw new Error(`Resposta invÃ¡lida de ${res.url}`);
   }
 };
 
@@ -145,19 +165,19 @@ const fetchWithRetry = async (url: string, init?: RequestInit, retries = 8) => {
     ...(localToken ? { 'Authorization': `Bearer ${localToken}` } : {})
   };
   
-  console.log(`🔍 Fetching ${url} with method ${init?.method || 'GET'} and headers:`, headers);
+  console.log(`ðŸ” Fetching ${url} with method ${init?.method || 'GET'} and headers:`, headers);
   
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, { ...init, headers });
       
-      // Se o status for 503 ou 502, é provável que o servidor esteja iniciando
+      // Se o status for 503 ou 502, Ã© provÃ¡vel que o servidor esteja iniciando
       if (res.status === 503 || res.status === 502) {
-        throw new Error('Servidor indisponível (iniciando)');
+        throw new Error('Servidor indisponÃ­vel (iniciando)');
       }
 
       // Verifica o corpo da resposta mesmo se o status for 200
-      // O proxy da plataforma às vezes retorna 200 com o HTML de "Starting Server"
+      // O proxy da plataforma Ã s vezes retorna 200 com o HTML de "Starting Server"
       const text = await res.clone().text();
       if (
         text.includes('<title>Starting Server...</title>') || 
@@ -177,21 +197,21 @@ const fetchWithRetry = async (url: string, init?: RequestInit, retries = 8) => {
       return res;
     } catch (err) {
       // Don't retry if it's a known non-retryable error
-      if (err instanceof Error && err.message.includes('Sessão expirada')) {
+      if (err instanceof Error && err.message.includes('SessÃ£o expirada')) {
         throw err;
       }
       
       if (i === retries) {
-        console.error(`❌ Falha definitiva ao buscar ${url}:`, err);
+        console.error(`âŒ Falha definitiva ao buscar ${url}:`, err);
         throw err;
       }
       // Espera progressiva mais longa: 3s, 6s, 9s...
       const delay = 3000 * (i + 1);
-      console.warn(`⚠️ Tentativa ${i + 1} falhou para ${url}: ${err instanceof Error ? err.message : String(err)}. Tentando novamente em ${delay}ms...`);
+      console.warn(`âš ï¸ Tentativa ${i + 1} falhou para ${url}: ${err instanceof Error ? err.message : String(err)}. Tentando novamente em ${delay}ms...`);
       await new Promise(r => setTimeout(r, delay));
     }
   }
-  throw new Error('Falha após retentativas');
+  throw new Error('Falha apÃ³s retentativas');
 };
 
 function normalizarTexto(texto: string) {
@@ -236,11 +256,11 @@ function extrairModeloMoto(textoPeca: string) {
 function extrairCategoria(textoPeca: string) {
   if (!textoPeca || textoPeca.length < 3) return '';
   const textoNormalizado = normalizarTexto(textoPeca);
-  // Ordena por tamanho decrescente para pegar o termo mais específico primeiro
+  // Ordena por tamanho decrescente para pegar o termo mais especÃ­fico primeiro
   const categoriasOrdenadas = [...CATEGORIAS_OFICIAIS].sort((a, b) => b.length - a.length);
   for (const categoria of categoriasOrdenadas) {
     const categoriaNormalizada = normalizarTexto(categoria);
-    // Se o texto da peça contém a categoria OU a categoria contém o texto da peça (ex: "escapamento" -> "Escapamentos")
+    // Se o texto da peÃ§a contÃ©m a categoria OU a categoria contÃ©m o texto da peÃ§a (ex: "escapamento" -> "Escapamentos")
     if (textoNormalizado.includes(categoriaNormalizada) || categoriaNormalizada.includes(textoNormalizado)) return categoria;
   }
   return '';
@@ -314,7 +334,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async (force = false, silent = false) => {
     const now = Date.now();
-    // Se não for forçado, não for silencioso e o cache for recente, não faz nada
+    // Se nÃ£o for forÃ§ado, nÃ£o for silencioso e o cache for recente, nÃ£o faz nada
     if (!force && !silent && (now - lastFetch) < CACHE_TIME && inventory.length > 0) {
       return; 
     }
@@ -347,10 +367,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.error('❌ Erro ao processar estoque:', e);
+          console.error('âŒ Erro ao processar estoque:', e);
         }
       } else {
-        console.error('❌ Erro ao buscar estoque:', results[0].reason);
+        console.error('âŒ Erro ao buscar estoque:', results[0].reason);
       }
 
       // Vendas
@@ -369,10 +389,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         } catch (e) {
-          console.error('❌ Erro ao processar vendas:', e);
+          console.error('âŒ Erro ao processar vendas:', e);
         }
       } else {
-        console.error('❌ Erro ao buscar vendas:', results[1].reason);
+        console.error('âŒ Erro ao buscar vendas:', results[1].reason);
       }
 
       // Motos
@@ -380,8 +400,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
           const data = await parseJson(results[2].value);
           if (data.success) {
-            // Grace period: se houve uma mutação recente (últimos 15s) e é um fetch silencioso,
-            // não sobrescrevemos o estado das motos para evitar que itens novos sumam (eventual consistency do Notion)
+            // Grace period: se houve uma mutaÃ§Ã£o recente (Ãºltimos 15s) e Ã© um fetch silencioso,
+            // nÃ£o sobrescrevemos o estado das motos para evitar que itens novos sumam (eventual consistency do Notion)
             const isRecentMutation = (Date.now() - lastMutationRef.current) < 15000;
             if (!silent || !isRecentMutation || motos.length === 0) {
               setMotos(prev => {
@@ -394,22 +414,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 return prev;
               });
             } else {
-              console.log('⏳ Pulando atualização de motos devido a mutação recente');
+              console.log('â³ Pulando atualizaÃ§Ã£o de motos devido a mutaÃ§Ã£o recente');
             }
           }
         } catch (e) {
-          console.error('❌ Erro ao processar motos:', e);
+          console.error('âŒ Erro ao processar motos:', e);
         }
       } else {
-        console.error('❌ Erro ao buscar motos:', results[2].reason);
+        console.error('âŒ Erro ao buscar motos:', results[2].reason);
       }
       
       setLastFetch(now);
     } catch (error: any) {
-      console.error('Erro crítico ao carregar dados:', error);
-      // Só mostra erro se não for silencioso
+      console.error('Erro crÃ­tico ao carregar dados:', error);
+      // SÃ³ mostra erro se nÃ£o for silencioso
       if (!silent) {
-        // Aqui poderíamos usar um toast ou setError global
+        // Aqui poderÃ­amos usar um toast ou setError global
       }
     } finally {
       setLoading(false);
@@ -420,7 +440,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // Carrega os dados imediatamente ao montar o componente
     loadData();
 
-    // Socket global para WhatsApp e Notificações
+    // Socket global para WhatsApp e NotificaÃ§Ãµes
     const socket = io();
     
     socket.on('whatsapp-status', (status) => {
@@ -452,18 +472,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }));
     });
 
-    // Polling para sincronização "instantânea" (silenciosa)
+    // Polling para sincronizaÃ§Ã£o "instantÃ¢nea" (silenciosa)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadData(false, true);
       }
-    }, 10000); // Aumentado para 10 segundos e adicionado verificação de visibilidade
+    }, 10000); // Aumentado para 10 segundos e adicionado verificaÃ§Ã£o de visibilidade
 
     const initApp = async () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await CapacitorUpdater.notifyAppReady();
-          console.log('✅ App pronto para atualizações automáticas');
+          console.log('âœ… App pronto para atualizaÃ§Ãµes automÃ¡ticas');
         } catch (error) {
           console.error('Erro no auto-update:', error);
         }
@@ -520,7 +540,7 @@ const salesData = [
 ];
 
 const categoryData = [
-  { name: 'Eletrônicos', value: 400 },
+  { name: 'EletrÃ´nicos', value: 400 },
   { name: 'Roupas', value: 300 },
   { name: 'Casa', value: 300 },
   { name: 'Outros', value: 200 },
@@ -659,7 +679,7 @@ const StatCard = memo(({ icon: Icon, label, value, trend, subValue, color, theme
             theme === 'dark' ? "text-white" : "text-zinc-900",
             isSensitive && !showSensitiveInfo && "blur-xl select-none",
             (label.includes('Valor') || label.includes('Vendas')) && "text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.4)]",
-            label.includes('Saídas') && "text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.4)]"
+            label.includes('SaÃ­das') && "text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.4)]"
           )}>
             {displayValue}
           </h3>
@@ -865,18 +885,9 @@ const DashboardView = ({
 
     const parseDate = (dateStr: any) => {
       if (!dateStr) return new Date(0);
-      let d = new Date(dateStr);
-      if (isNaN(d.getTime()) && typeof dateStr === 'string') {
-        if (dateStr.includes('/')) {
-          const [day, month, year] = dateStr.split('/').map(Number);
-          d = new Date(year, month - 1, day);
-        } else if (dateStr.includes('-')) {
-          const datePart = dateStr.split('T')[0];
-          const [y, m, day] = datePart.split('-').map(Number);
-          d = new Date(y, m - 1, day);
-        }
-      }
-      return d;
+      // Sempre usa parseLocalDate para evitar shift de timezone
+      // pois o Supabase pode retornar ISO com timezone UTC
+      return parseLocalDate(dateStr);
     };
 
     const parseValue = (val: any) => {
@@ -918,7 +929,7 @@ const DashboardView = ({
       const itemDate = parseDate(item.data);
       const isCurrentMonth = itemDate.getMonth() === mesAtual && 
                              itemDate.getFullYear() === anoAtual;
-      const isNotSaida = item.tipo !== 'SAÍDA';
+      const isNotSaida = item.tipo !== 'SAÃDA';
       return isCurrentMonth && isNotSaida;
     });
 
@@ -926,7 +937,7 @@ const DashboardView = ({
       const itemDate = parseDate(item.data);
       const isCurrentMonth = itemDate.getMonth() === mesAtual && 
                              itemDate.getFullYear() === anoAtual;
-      const isSaida = item.tipo === 'SAÍDA';
+      const isSaida = item.tipo === 'SAÃDA';
       return isCurrentMonth && isSaida;
     });
 
@@ -934,7 +945,7 @@ const DashboardView = ({
     const valorSaidasMes = saidasMes.reduce((sum, v) => sum + parseValue(v.valor), 0);
     const ticketMedio = vendasMes.length > 0 ? valorVendasMes / vendasMes.length : 0;
 
-    console.log('📊 Dashboard Metrics Debug:', {
+    console.log('ðŸ“Š Dashboard Metrics Debug:', {
       inventoryCount: inventory.length,
       salesCount: sales.length,
       vendasMesCount: vendasMes.length,
@@ -969,7 +980,7 @@ const DashboardView = ({
       const isCancelled = sale.is_cancelled || sale.status === 'cancelled' || sale.shipping_status?.startsWith('cancelled') || sale.shipping_substatus === 'cancelled' || sale.shipping_substatus === 'not_delivered';
       
       if (mlSalesSubTab === 'pending') {
-        // Vendas pendentes: prontas para imprimir etiqueta, etiqueta já impressa ou aguardando NF
+        // Vendas pendentes: prontas para imprimir etiqueta, etiqueta jÃ¡ impressa ou aguardando NF
         return !sale.has_dispute && !isCancelled && (sale.shipping_status?.startsWith('ready_to_ship') || sale.shipping_status === 'pending' || sale.shipping_status?.includes('ready_to_print') || sale.shipping_status?.includes('printed') || sale.shipping_status?.includes('invoice_pending'));
       }
       if (mlSalesSubTab === 'dispute') return sale.has_dispute;
@@ -981,7 +992,7 @@ const DashboardView = ({
     });
   }, [metrics.ultimasVendas, mlSalesSubTab, source]);
 
-  // Gráfico Vendas por Dia (últimos 30 dias)
+  // GrÃ¡fico Vendas por Dia (Ãºltimos 30 dias)
   const chartData = useMemo(() => {
     if (source === 'mercadolivre' && mlData?.chartData) {
       return mlData.chartData;
@@ -1003,15 +1014,8 @@ const DashboardView = ({
 
     const parseDate = (dateStr: any) => {
       if (!dateStr) return new Date(0);
-      let d = new Date(dateStr);
-      if (isNaN(d.getTime()) && typeof dateStr === 'string' && dateStr.length >= 10) {
-        const datePart = dateStr.split('T')[0];
-        if (datePart.includes('-')) {
-          const [y, m, day] = datePart.split('-').map(Number);
-          d = new Date(y, m - 1, day);
-        }
-      }
-      return d;
+      // Sempre usa parseLocalDate para evitar shift de timezone
+      return parseLocalDate(dateStr);
     };
 
     sales.forEach(sale => {
@@ -1019,7 +1023,7 @@ const DashboardView = ({
       const saleDate = `${saleDateObj.getFullYear()}-${String(saleDateObj.getMonth() + 1).padStart(2, '0')}-${String(saleDateObj.getDate()).padStart(2, '0')}`;
       const day = days.find(d => d.date === saleDate);
       if (day) {
-        if (sale.tipo === 'SAÍDA') {
+        if (sale.tipo === 'SAÃDA') {
           day.saidas += Number(sale.valor) || 0;
         } else {
           day.vendas += Number(sale.valor) || 0;
@@ -1030,35 +1034,35 @@ const DashboardView = ({
     return days;
   }, [sales, mlData, source]);
 
-  // Gráfico Vendas por Tipo (Valor)
+  // GrÃ¡fico Vendas por Tipo (Valor)
   const pieData = useMemo(() => {
     const types: Record<string, number> = {};
-    sales.filter(s => s.tipo !== 'SAÍDA').forEach(sale => {
+    sales.filter(s => s.tipo !== 'SAÃDA').forEach(sale => {
       types[sale.tipo] = (types[sale.tipo] || 0) + sale.valor;
     });
     return Object.entries(types).map(([name, value]) => ({ name, value }));
   }, [sales]);
 
   const latestSales = useMemo(() => {
-    return [...sales].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()).slice(0, 5);
+    return [...sales].sort((a, b) => parseLocalDate(b.data).getTime() - parseLocalDate(a.data).getTime()).slice(0, 5);
   }, [sales]);
 
   const filteredSalesByType = useMemo(() => {
     if (!selectedPaymentType) return [];
     return sales.filter(s => s.tipo === selectedPaymentType)
-      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+      .sort((a, b) => parseLocalDate(b.data).getTime() - parseLocalDate(a.data).getTime());
   }, [sales, selectedPaymentType]);
 
   if (loading && inventory.length === 0 && sales.length === 0) {
-    // Retornar null ou não bloquear a tela para que inicie direto
-    // Apenas mostrar um indicador sutil se necessário
+    // Retornar null ou nÃ£o bloquear a tela para que inicie direto
+    // Apenas mostrar um indicador sutil se necessÃ¡rio
   }
 
   return (
     <>
       <div className={cn("space-y-6", isSearchOpen && "blur-md pointer-events-none")}>
       <div className="space-y-4 mb-6">
-        {/* Linha 1: Título e Ações Principais */}
+        {/* Linha 1: TÃ­tulo e AÃ§Ãµes Principais */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center justify-between w-full sm:w-auto">
             <h2 className={cn("text-2xl sm:text-3xl font-black tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
@@ -1066,7 +1070,7 @@ const DashboardView = ({
             </h2>
 
             <div className="flex sm:hidden items-center gap-2">
-              {/* Toggle de Informações Sensíveis (Mobile) */}
+              {/* Toggle de InformaÃ§Ãµes SensÃ­veis (Mobile) */}
               <button
                 onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
                 className={cn(
@@ -1079,7 +1083,7 @@ const DashboardView = ({
                 {showSensitiveInfo ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
 
-              {/* Botão de Sincronizar (Mobile) */}
+              {/* BotÃ£o de Sincronizar (Mobile) */}
               <button 
                 onClick={() => {
                   refreshData();
@@ -1102,7 +1106,7 @@ const DashboardView = ({
           
           <div className="hidden sm:flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
             <div className="flex items-center gap-2">
-              {/* Toggle de Informações Sensíveis */}
+              {/* Toggle de InformaÃ§Ãµes SensÃ­veis */}
               <button
                 onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
                 className={cn(
@@ -1111,12 +1115,12 @@ const DashboardView = ({
                     ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
                     : "bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
                 )}
-                title={showSensitiveInfo ? "Ocultar Sensíveis" : "Mostrar Sensíveis"}
+                title={showSensitiveInfo ? "Ocultar SensÃ­veis" : "Mostrar SensÃ­veis"}
               >
                 {showSensitiveInfo ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
 
-              {/* Botão de Sincronizar */}
+              {/* BotÃ£o de Sincronizar */}
               <button 
                 onClick={() => {
                   refreshData();
@@ -1138,7 +1142,7 @@ const DashboardView = ({
                 <span className="hidden sm:inline">Sincronizar</span>
               </button>
 
-              {/* Filtro de Período (apenas para Mercado Livre) */}
+              {/* Filtro de PerÃ­odo (apenas para Mercado Livre) */}
               {source === 'mercadolivre' && (
                 <div className="relative">
                   <button
@@ -1154,7 +1158,7 @@ const DashboardView = ({
                         ? "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
                         : "bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50"
                     )}
-                    title="Filtro de Período"
+                    title="Filtro de PerÃ­odo"
                   >
                     <Calendar size={18} />
                     {mlPeriod !== '30d' && (
@@ -1169,14 +1173,14 @@ const DashboardView = ({
                       theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                     )}
                   >
-                    <h4 className={cn("text-xs font-bold uppercase tracking-wider mb-2 px-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>Período</h4>
+                    <h4 className={cn("text-xs font-bold uppercase tracking-wider mb-2 px-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>PerÃ­odo</h4>
                     <div className="space-y-1 mb-3">
                       {[
-                        { value: '7d', label: 'Últimos 7 dias' },
-                        { value: '15d', label: 'Últimos 15 dias' },
-                        { value: '30d', label: 'Últimos 30 dias' },
-                        { value: '60d', label: 'Últimos 60 dias' },
-                        { value: 'custom', label: 'Data Específica' },
+                        { value: '7d', label: 'Ãšltimos 7 dias' },
+                        { value: '15d', label: 'Ãšltimos 15 dias' },
+                        { value: '30d', label: 'Ãšltimos 30 dias' },
+                        { value: '60d', label: 'Ãšltimos 60 dias' },
+                        { value: 'custom', label: 'Data EspecÃ­fica' },
                       ].map(option => (
                         <button
                           key={option.value}
@@ -1201,7 +1205,7 @@ const DashboardView = ({
                     {mlPeriod === 'custom' && (
                       <div className={cn("space-y-2 pt-2 border-t", theme === 'dark' ? "border-zinc-800" : "border-zinc-200")}>
                         <div>
-                          <label className={cn("block text-[10px] font-bold uppercase mb-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>Início</label>
+                          <label className={cn("block text-[10px] font-bold uppercase mb-1", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>InÃ­cio</label>
                           <input
                             type="date"
                             value={mlCustomDate.start}
@@ -1243,7 +1247,7 @@ const DashboardView = ({
           </div>
         </div>
 
-      {/* Grid de Métricas Principais */}
+      {/* Grid de MÃ©tricas Principais */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 px-4 sm:px-0">
         {source === 'estoque' ? (
           <>
@@ -1258,15 +1262,15 @@ const DashboardView = ({
             />
             <StatCard 
               icon={TrendingUp} 
-              label="Vendas (Mês)" 
+              label="Vendas (MÃªs)" 
               value={metrics.valorVendasMes} 
-              subValue={`${metrics.totalVendasMes} vendas no mês`}
+              subValue={`${metrics.totalVendasMes} vendas no mÃªs`}
               color="bg-teal-500" 
               theme={theme}
               isSensitive={true}
             />
             
-            {/* Gráfico Estiloso que ocupa o espaço de 2 cards */}
+            {/* GrÃ¡fico Estiloso que ocupa o espaÃ§o de 2 cards */}
             <div className={cn(
               "col-span-2 border rounded-2xl p-5 transition-all duration-300 relative overflow-hidden flex flex-col h-full",
               theme === 'dark' 
@@ -1329,7 +1333,7 @@ const DashboardView = ({
 
             <StatCard 
               icon={DollarSign} 
-              label="Saídas (Mês)" 
+              label="SaÃ­das (MÃªs)" 
               value={metrics.valorSaidasMes} 
               subValue="despesas operacionais"
               color="bg-rose-400" 
@@ -1338,7 +1342,7 @@ const DashboardView = ({
             />
             <StatCard 
               icon={ShoppingCart} 
-              label="Ticket Médio" 
+              label="Ticket MÃ©dio" 
               value={metrics.ticketMedio} 
               subValue="por venda realizada"
               color="bg-amber-400" 
@@ -1350,9 +1354,9 @@ const DashboardView = ({
           <>
     <StatCard 
       icon={Box} 
-      label="Anúncios Ativos" 
+      label="AnÃºncios Ativos" 
       value={metrics.activeListings} 
-      subValue={`De ${metrics.totalItensEstoque} anúncios totais`}
+      subValue={`De ${metrics.totalItensEstoque} anÃºncios totais`}
       color="bg-indigo-500" 
       theme={theme} 
       onClick={onFetchAllMlListings}
@@ -1360,9 +1364,9 @@ const DashboardView = ({
     />
     <StatCard 
       icon={BarChart3} 
-      label="Vendas ML (Mês)" 
+      label="Vendas ML (MÃªs)" 
       value={metrics.valorVendasMes} 
-      subValue={`${metrics.totalVendasMes} pedidos no período`}
+      subValue={`${metrics.totalVendasMes} pedidos no perÃ­odo`}
       color="bg-teal-500" 
       theme={theme} 
       isSensitive={true}
@@ -1443,7 +1447,7 @@ const DashboardView = ({
                 />
                 <Area type="monotone" dataKey="vendas" name="Vendas" stroke={source === 'estoque' ? "#8b5cf6" : "#10b981"} strokeWidth={3} fillOpacity={1} fill="url(#colorVendas)" />
                 {source === 'estoque' && (
-                  <Area type="monotone" dataKey="saidas" name="Saídas" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorSaidas)" />
+                  <Area type="monotone" dataKey="saidas" name="SaÃ­das" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorSaidas)" />
                 )}
               </AreaChart>
             </ResponsiveContainer>
@@ -1493,11 +1497,11 @@ const DashboardView = ({
               </ResponsiveContainer>
             </div>
             <p className="text-[8px] text-center text-zinc-500 font-black uppercase tracking-[0.3em] mt-4">
-              Últimos 15 dias
+              Ãšltimos 15 dias
             </p>
           </div>
 
-        {/* Gráfico Secundário / Ações Rápidas */}
+        {/* GrÃ¡fico SecundÃ¡rio / AÃ§Ãµes RÃ¡pidas */}
         <div className="space-y-6">
           <div className={cn(
             "border p-6 rounded-2xl transition-all duration-300",
@@ -1506,7 +1510,7 @@ const DashboardView = ({
               : "bg-white border-zinc-200 shadow-sm"
           )}>
             <h3 className={cn("text-lg font-bold tracking-tight mb-6", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Vendas por Tipo" : "Status de Anúncios"}
+              {source === 'estoque' ? "Vendas por Tipo" : "Status de AnÃºncios"}
             </h3>
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -1566,7 +1570,7 @@ const DashboardView = ({
             </div>
           </div>
 
-          {/* Ações Rápidas ML */}
+          {/* AÃ§Ãµes RÃ¡pidas ML */}
           {source === 'mercadolivre' && (
             <div className={cn(
               "border p-6 rounded-2xl transition-all duration-300",
@@ -1575,7 +1579,7 @@ const DashboardView = ({
                 : "bg-white border-zinc-200 shadow-sm"
             )}>
               <h3 className={cn("text-sm font-bold tracking-tight mb-4 uppercase text-zinc-500", theme === 'dark' ? "text-zinc-400" : "text-zinc-500")}>
-                Ações Rápidas ML
+                AÃ§Ãµes RÃ¡pidas ML
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 <button 
@@ -1590,13 +1594,13 @@ const DashboardView = ({
                   className="flex flex-col items-center gap-2 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all group"
                 >
                   <Package className="text-amber-500 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Anúncios</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">AnÃºncios</span>
                 </button>
               </div>
             </div>
           )}
         </div>
-        {/* Últimas Vendas / Pedidos ML */}
+        {/* Ãšltimas Vendas / Pedidos ML */}
         <div id="vendas-section" className={cn(
           "lg:col-span-3 border rounded-2xl overflow-hidden transition-all duration-300 mt-6",
           theme === 'dark' 
@@ -1608,7 +1612,7 @@ const DashboardView = ({
             theme === 'dark' ? "border-zinc-800/50" : "border-zinc-100"
           )}>
             <h3 className={cn("font-bold tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Últimas Vendas" : "Vendas (Mercado Livre)"}
+              {source === 'estoque' ? "Ãšltimas Vendas" : "Vendas (Mercado Livre)"}
             </h3>
             
             <div className="flex items-center gap-2">
@@ -1638,7 +1642,7 @@ const DashboardView = ({
                           theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                         )}
                       >
-                        {['TODOS', 'CRÉDITO', 'DÉBITO', 'DINHEIRO', 'MARCELO', 'PENDÊNCIA', 'PIX'].map((type) => (
+                        {['TODOS', 'CRÃ‰DITO', 'DÃ‰BITO', 'DINHEIRO', 'MARCELO', 'PENDÃŠNCIA', 'PIX'].map((type) => (
                           <button
                             key={type}
                             onClick={() => {
@@ -1675,7 +1679,7 @@ const DashboardView = ({
                     "text-[10px] uppercase font-bold tracking-wider",
                     theme === 'dark' ? "bg-zinc-800/30 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                   )}>
-                    <th className="px-4 py-3">Peça</th>
+                    <th className="px-4 py-3">PeÃ§a</th>
                     <th className="px-4 py-3">Valor</th>
                     <th className="px-4 py-3">Tipo</th>
                     <th className="px-4 py-3">Data</th>
@@ -1708,8 +1712,8 @@ const DashboardView = ({
                           "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
                           sale.tipo?.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
                           sale.tipo?.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                          sale.tipo?.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                          sale.tipo?.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                          sale.tipo?.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                          sale.tipo?.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                           sale.tipo?.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                           sale.tipo?.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                           (theme === 'dark' ? "bg-zinc-800 text-zinc-400 border-zinc-700/50" : "bg-zinc-100 text-zinc-600")
@@ -1722,7 +1726,7 @@ const DashboardView = ({
                           "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
                           theme === 'dark' ? "bg-zinc-800/50 text-zinc-500 border-zinc-700/50" : "bg-zinc-50 text-zinc-500 border-zinc-200"
                         )}>
-                          {new Date(sale.data).toLocaleDateString('pt-BR')}
+                          {parseLocalDate(sale.data).toLocaleDateString('pt-BR')}
                         </span>
                       </td>
                     </tr>
@@ -1733,7 +1737,7 @@ const DashboardView = ({
               {/* Mobile Cards */}
               <div className="md:hidden flex flex-col max-h-[500px] overflow-y-auto scrollbar-hide divide-y divide-zinc-800/10 px-8">
                 {filteredLastSales.slice(0, 10).map((sale: any) => {
-                  const isSaida = sale.tipo === 'SAÍDA';
+                  const isSaida = sale.tipo === 'SAÃDA';
                   return (
                     <div 
                       key={sale.id}
@@ -1761,7 +1765,7 @@ const DashboardView = ({
                           "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border",
                           theme === 'dark' ? "bg-zinc-800/50 text-zinc-500 border-zinc-700/50" : "bg-zinc-50 text-zinc-500 border-zinc-200"
                         )}>
-                          {new Date(sale.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          {parseLocalDate(sale.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1772,8 +1776,8 @@ const DashboardView = ({
                             : (
                               sale.tipo?.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
                               sale.tipo?.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                              sale.tipo?.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                              sale.tipo?.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                              sale.tipo?.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                              sale.tipo?.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                               sale.tipo?.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                               sale.tipo?.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                               (theme === 'dark' ? "bg-zinc-800 text-zinc-500 border border-zinc-700" : "bg-zinc-100 text-zinc-400 border border-zinc-200")
@@ -1831,7 +1835,7 @@ const DashboardView = ({
                         : (theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800/50" : "text-zinc-500 hover:bg-zinc-50")
                     )}
                   >
-                    Mediações
+                    MediaÃ§Ãµes
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
                       mlSalesSubTab === 'dispute' ? "bg-red-500 text-white" : (theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-200 text-zinc-400")
@@ -1850,7 +1854,7 @@ const DashboardView = ({
                       : (theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800/50" : "text-zinc-500 hover:bg-zinc-50")
                   )}
                 >
-                  Em trânsito
+                  Em trÃ¢nsito
                   <span className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
                     mlSalesSubTab === 'shipped' ? "bg-violet-500 text-white" : (theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-200 text-zinc-400")
@@ -1924,10 +1928,10 @@ const DashboardView = ({
                   }
                   if (sale.has_dispute) {
                     return {
-                      title: 'Mediação em curso',
+                      title: 'MediaÃ§Ã£o em curso',
                       titleColor: 'text-red-500',
-                      description: 'Responda à mediação para prosseguir com a venda.',
-                      buttonText: 'Responder mediação',
+                      description: 'Responda Ã  mediaÃ§Ã£o para prosseguir com a venda.',
+                      buttonText: 'Responder mediaÃ§Ã£o',
                       buttonAction: 'dispute'
                     };
                   }
@@ -1936,14 +1940,14 @@ const DashboardView = ({
                       return {
                         title: 'Pronta para gerar etiqueta',
                         titleColor: 'text-orange-500',
-                        description: 'Você deve despachar o pacote hoje ou amanhã em Correios.',
+                        description: 'VocÃª deve despachar o pacote hoje ou amanhÃ£ em Correios.',
                         buttonText: 'GERAR ETIQUETA',
                         buttonAction: 'print'
                       };
                     }
                     if (sale.shipping_status.includes('printed') || sale.shipping_substatus === 'printed') {
                       return {
-                        title: 'Etiqueta já impressa',
+                        title: 'Etiqueta jÃ¡ impressa',
                         titleColor: 'text-blue-500',
                         description: 'Aguardar coleta ou despachar o pacote.',
                         buttonText: 'Reimprimir etiqueta',
@@ -1963,16 +1967,16 @@ const DashboardView = ({
                     return {
                       title: 'Pronta para envio',
                       titleColor: 'text-orange-500',
-                      description: 'Você deve despachar o pacote.',
+                      description: 'VocÃª deve despachar o pacote.',
                       buttonText: 'GERAR ETIQUETA',
                       buttonAction: 'print'
                     };
                   }
                   if (sale.shipping_status === 'shipped') {
                     return {
-                      title: 'Em trânsito',
+                      title: 'Em trÃ¢nsito',
                       titleColor: 'text-violet-500',
-                      description: 'O pacote está a caminho do comprador.',
+                      description: 'O pacote estÃ¡ a caminho do comprador.',
                       buttonText: 'Acompanhar envio',
                       buttonAction: 'track'
                     };
@@ -1990,7 +1994,7 @@ const DashboardView = ({
                     return {
                       title: 'Envio pendente',
                       titleColor: 'text-amber-500',
-                      description: 'Aguardando liberação da etiqueta.',
+                      description: 'Aguardando liberaÃ§Ã£o da etiqueta.',
                       buttonText: 'Ver detalhes',
                       buttonAction: 'view'
                     };
@@ -2007,7 +2011,7 @@ const DashboardView = ({
                   return {
                     title: sale.status === 'Pago' ? 'Pagamento aprovado' : sale.status,
                     titleColor: 'text-zinc-500',
-                    description: 'Aguardando atualização de envio.',
+                    description: 'Aguardando atualizaÃ§Ã£o de envio.',
                     buttonText: 'Ver detalhes',
                     buttonAction: 'view'
                   };
@@ -2026,7 +2030,7 @@ const DashboardView = ({
                       <div className="bg-amber-400 text-black text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">ML</div>
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-zinc-200">#{sale.id}</span>
-                        <span className="text-[10px] text-zinc-500">{new Date(sale.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-[10px] text-zinc-500">{parseLocalDate(sale.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
                     
@@ -2047,7 +2051,7 @@ const DashboardView = ({
                     </div>
                   </div>
 
-                  {/* Ação Principal e Detalhes */}
+                  {/* AÃ§Ã£o Principal e Detalhes */}
                   <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/5">
                     <div className="flex flex-col gap-0.5">
                       <span className={cn("font-bold text-sm", statusInfo.titleColor)}>{statusInfo.title}</span>
@@ -2057,7 +2061,7 @@ const DashboardView = ({
                       <button 
                         onClick={async () => {
                           if (!sale.shipping_id) {
-                            alert('ID de envio não encontrado para este pedido.');
+                            alert('ID de envio nÃ£o encontrado para este pedido.');
                             return;
                           }
                           try {
@@ -2089,7 +2093,7 @@ const DashboardView = ({
                             window.URL.revokeObjectURL(url);
                           } catch (err) {
                             console.error('Erro ao baixar etiqueta:', err);
-                            alert('Erro ao baixar etiqueta. Verifique se o pedido já possui etiqueta gerada.');
+                            alert('Erro ao baixar etiqueta. Verifique se o pedido jÃ¡ possui etiqueta gerada.');
                           }
                         }}
                         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
@@ -2163,7 +2167,7 @@ const DashboardView = ({
           }
         </div>
 
-        {/* Últimos Itens / Anúncios Recentes ML */}
+        {/* Ãšltimos Itens / AnÃºncios Recentes ML */}
         <div className={cn(
           "lg:col-span-3 border rounded-2xl overflow-hidden transition-all duration-300 mt-6",
           theme === 'dark' 
@@ -2175,7 +2179,7 @@ const DashboardView = ({
             theme === 'dark' ? "border-zinc-800/50" : "border-zinc-100"
           )}>
             <h3 className={cn("font-bold tracking-tight", theme === 'dark' ? "text-white" : "text-zinc-900")}>
-              {source === 'estoque' ? "Últimos itens adicionados" : "Anúncios Recentes ML"}
+              {source === 'estoque' ? "Ãšltimos itens adicionados" : "AnÃºncios Recentes ML"}
             </h3>
             <Package size={16} className="text-violet-500" />
           </div>
@@ -2187,7 +2191,7 @@ const DashboardView = ({
                   "text-[10px] uppercase font-bold tracking-wider",
                   theme === 'dark' ? "bg-zinc-800/30 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                 )}>
-                  <th className="px-4 py-3">{source === 'estoque' ? "Peça" : "Anúncio"}</th>
+                  <th className="px-4 py-3">{source === 'estoque' ? "PeÃ§a" : "AnÃºncio"}</th>
                   <th className="px-4 py-3 text-center">{source === 'estoque' ? "Qtd" : "Vendas"}</th>
                   <th className="px-4 py-3">{source === 'estoque' ? "Moto" : "Status"}</th>
                   {source === 'mercadolivre' && <th className="px-4 py-3">Criado em</th>}
@@ -2296,7 +2300,7 @@ const DashboardView = ({
         </div>
       </div>
       
-      {/* Modal de Transações por Tipo */}
+      {/* Modal de TransaÃ§Ãµes por Tipo */}
       <AnimatePresence>
         {selectedPaymentType && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2313,7 +2317,7 @@ const DashboardView = ({
                 <div className="flex-1">
                   <h3 className="text-xl font-bold text-white flex items-center gap-3">
                     <History className="text-violet-500" />
-                    Transações: {selectedPaymentType}
+                    TransaÃ§Ãµes: {selectedPaymentType}
                   </h3>
                   <p className="text-zinc-500 text-sm mt-1">
                     Total de {filteredSalesByType.length} registros encontrados
@@ -2342,7 +2346,7 @@ const DashboardView = ({
                       "text-[10px] uppercase font-bold tracking-wider",
                       theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                     )}>
-                      <th className="px-6 py-4 border-b border-zinc-800/50">Item / Descrição</th>
+                      <th className="px-6 py-4 border-b border-zinc-800/50">Item / DescriÃ§Ã£o</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">Valor</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">Data</th>
                       <th className="px-6 py-4 border-b border-zinc-800/50">RK ID</th>
@@ -2368,7 +2372,7 @@ const DashboardView = ({
                             </span>
                           </td>
                           <td className="px-6 py-4 text-zinc-400 text-xs">
-                            {new Date(sale.data).toLocaleDateString('pt-BR', {
+                            {parseLocalDate(sale.data).toLocaleDateString('pt-BR', {
                               day: '2-digit',
                               month: '2-digit',
                               year: 'numeric',
@@ -2384,7 +2388,7 @@ const DashboardView = ({
                     ) : (
                       <tr>
                         <td colSpan={4} className="px-6 py-12 text-center text-zinc-500">
-                          Nenhuma transação encontrada para este tipo.
+                          Nenhuma transaÃ§Ã£o encontrada para este tipo.
                         </td>
                       </tr>
                     )}
@@ -2405,7 +2409,7 @@ const DashboardView = ({
         )}
       </AnimatePresence>
 
-      {/* Modal de Todos os Anúncios ML */}
+      {/* Modal de Todos os AnÃºncios ML */}
       <AnimatePresence>
         {showAllMlAds && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2422,7 +2426,7 @@ const DashboardView = ({
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-white flex items-center gap-3">
                     <Package className="text-amber-500" />
-                    Anúncios Ativos
+                    AnÃºncios Ativos
                   </h3>
                   <button 
                     onClick={() => setShowAllMlAds(false)}
@@ -2433,7 +2437,7 @@ const DashboardView = ({
                 </div>
                 <input 
                   type="text"
-                  placeholder="Buscar peça ou moto..."
+                  placeholder="Buscar peÃ§a ou moto..."
                   value={mlSearchTerm}
                   onChange={(e) => { setMlSearchTerm(e.target.value); setMlCurrentPage(1); }}
                   className="w-full px-4 py-3 rounded-xl bg-zinc-800 text-white text-sm border border-zinc-700 focus:outline-none focus:border-amber-500"
@@ -2444,7 +2448,7 @@ const DashboardView = ({
                 {isMlListingsLoading ? (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <Loader2 className="animate-spin text-amber-500" size={40} />
-                    <p className="text-zinc-500 font-bold animate-pulse">Buscando anúncios...</p>
+                    <p className="text-zinc-500 font-bold animate-pulse">Buscando anÃºncios...</p>
                   </div>
                 ) : (
                   <>
@@ -2452,7 +2456,7 @@ const DashboardView = ({
                     <div className="md:hidden p-4 space-y-3">
                       {paginatedMlListings.map((item) => {
                         // Heuristic: extract moto name from title
-                        // Assuming title format: "Peça Moto" or "Peça (Moto)"
+                        // Assuming title format: "PeÃ§a Moto" or "PeÃ§a (Moto)"
                         const title = item.titulo || item.id;
                         const parts = title.split(/\s\(/)[0].split(/\s/);
                         const motoName = parts.slice(-2).join(' ');
@@ -2490,10 +2494,10 @@ const DashboardView = ({
                         "text-[10px] uppercase font-bold tracking-wider",
                         theme === 'dark' ? "bg-zinc-800 text-zinc-500" : "bg-zinc-50 text-zinc-500"
                       )}>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('titulo')}>Anúncio {mlSortConfig.key === 'titulo' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('preco')}>Preço {mlSortConfig.key === 'preco' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 text-center cursor-pointer" onClick={() => toggleMlSort('estoque')}>Estoque {mlSortConfig.key === 'estoque' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('criado_em')}>Data {mlSortConfig.key === 'criado_em' && (mlSortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('titulo')}>AnÃºncio {mlSortConfig.key === 'titulo' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('preco')}>PreÃ§o {mlSortConfig.key === 'preco' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 text-center cursor-pointer" onClick={() => toggleMlSort('estoque')}>Estoque {mlSortConfig.key === 'estoque' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
+                        <th className="px-6 py-4 border-b border-zinc-800/50 cursor-pointer" onClick={() => toggleMlSort('criado_em')}>Data {mlSortConfig.key === 'criado_em' && (mlSortConfig.direction === 'asc' ? 'â†‘' : 'â†“')}</th>
                         <th className="px-6 py-4 border-b border-zinc-800/50">Status</th>
                       </tr>
                     </thead>
@@ -2546,7 +2550,7 @@ const DashboardView = ({
               </div>
               
               <div className="p-4 border-t border-zinc-800/50 bg-zinc-900/30 flex justify-between items-center">
-                <span className="text-sm text-zinc-500">Página {mlCurrentPage} de {mlTotalPages || 1}</span>
+                <span className="text-sm text-zinc-500">PÃ¡gina {mlCurrentPage} de {mlTotalPages || 1}</span>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setMlCurrentPage(p => Math.max(1, p - 1))}
@@ -2560,7 +2564,7 @@ const DashboardView = ({
                     disabled={mlCurrentPage >= mlTotalPages}
                     className="px-4 py-2 rounded-xl bg-zinc-800 text-white font-bold hover:bg-zinc-700 transition-all disabled:opacity-50"
                   >
-                    Próximo
+                    PrÃ³ximo
                   </button>
                 </div>
               </div>
@@ -2572,1733 +2576,6 @@ const DashboardView = ({
     </>
   );
 };
-
-const InventoryRow = memo(({ 
-  item, 
-  theme, 
-  selectedIds, 
-  toggleSelect, 
-  onSelectItem, 
-  readOnly, 
-  handleInventoryInlineEdit, 
-  editingCell, 
-  handleInventoryInlineSave, 
-  setEditingCell, 
-  columns, 
-  formatCurrency, 
-  formatDate,
-  openEditModal,
-  setItemToDelete,
-  setIsDeleteConfirmOpen
-}: any) => (
-  <tr 
-    key={item.id} 
-    onClick={() => onSelectItem(item)}
-    className={cn(
-      "transition-all duration-200 group cursor-pointer transform-gpu",
-      selectedIds.includes(item.id) 
-        ? theme === 'dark' ? "bg-violet-500/10" : "bg-violet-50"
-        : theme === 'dark' ? "hover:bg-zinc-800/20" : "hover:bg-zinc-50"
-    )}
-  >
-    <td className="px-3 py-2">
-      <div 
-        className={cn(
-          "w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all",
-          selectedIds.includes(item.id) 
-            ? "bg-violet-600 border-violet-600 opacity-100" 
-            : cn(
-                "opacity-0 group-hover:opacity-100",
-                theme === 'dark' ? "border-zinc-700" : "border-zinc-300"
-              )
-        )}
-        onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-      >
-        {selectedIds.includes(item.id) && <Check className="text-white" size={10} />}
-      </div>
-    </td>
-    {columns.map((col: any) => (
-      <td key={`${item.id}-${col.key}`} className={cn(
-        "px-3 py-2 text-xs transition-colors",
-        theme === 'dark' ? "text-zinc-400" : "text-zinc-600"
-      )} onDoubleClick={() => !readOnly && handleInventoryInlineEdit(item.id, col.key)}>
-        {editingCell?.itemId === item.id && editingCell?.field === col.key ? (
-          <input 
-            defaultValue={item[col.key]}
-            onBlur={(e) => handleInventoryInlineSave(item.id, col.key, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleInventoryInlineSave(item.id, col.key, e.currentTarget.value);
-              if (e.key === 'Escape') setEditingCell(null);
-            }}
-            autoFocus
-            className="w-full bg-transparent border-b border-violet-500 outline-none"
-          />
-        ) : col.key === 'valor' ? (
-          <span className="font-bold text-emerald-500">{formatCurrency(item[col.key])}</span>
-        ) : col.key === 'criado_em' ? (
-          <span className="text-[10px] text-zinc-500">{formatDate(item[col.key])}</span>
-        ) : col.key === 'ml_link' && item[col.key] ? (
-          <a 
-            href={item[col.key]} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="p-1 rounded bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 inline-block"
-          >
-            <ExternalLink size={12} />
-          </a>
-        ) : col.key === 'imagem' && item[col.key] ? (
-          <div className={cn(
-            "w-8 h-8 rounded-lg overflow-hidden border relative",
-            theme === 'dark' ? "border-zinc-800/50" : "border-zinc-200"
-          )}>
-            <img 
-              loading="lazy"
-              src={item[col.key]} 
-              alt={item.nome} 
-              className="w-full h-full object-cover" 
-              referrerPolicy="no-referrer" 
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-            <div className={cn("absolute inset-0 flex items-center justify-center -z-10", theme === 'dark' ? "bg-zinc-900" : "bg-zinc-100")}>
-              <Package size={12} className="text-zinc-400 opacity-50" />
-            </div>
-          </div>
-        ) : col.key === 'categoria' ? (
-          <span className={cn(
-            "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors",
-            theme === 'dark' ? "bg-violet-500/10 text-violet-400 border border-violet-500/20" : "bg-zinc-100 text-zinc-600"
-          )}>
-            {item[col.key]}
-          </span>
-        ) : col.key === 'moto' ? (
-          <span className={cn(
-            "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors",
-            theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200"
-          )}>
-            {item[col.key]}
-          </span>
-        ) : col.key === 'actions' ? (
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(item);
-              }}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' ? "bg-violet-500/10 text-violet-400 hover:bg-violet-500/20" : "text-zinc-400 hover:text-violet-600 hover:bg-violet-50"
-              )}
-              title="Editar item"
-            >
-              <Edit2 size={16} />
-            </button>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setItemToDelete(item.id);
-                setIsDeleteConfirmOpen(true);
-              }}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "text-zinc-400 hover:text-red-600 hover:bg-red-50"
-              )}
-              title="Excluir item"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ) : (
-          <span className="truncate block max-w-[150px]">{item[col.key] || '-'}</span>
-        )}
-      </td>
-    ))}
-  </tr>
-));
-
-const InventoryView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen, readOnly = false, pendingEditItem, setPendingEditItem }: { 
-  theme: 'light' | 'dark', 
-  onSelectItem: (item: any) => void,
-  onRegisterActions?: (actions: { edit: (item: any) => void, delete: (id: string) => void, focusSearch?: () => void }) => void,
-  isSearchOpen?: boolean,
-  readOnly?: boolean,
-  pendingEditItem?: any | null,
-  setPendingEditItem?: (item: any | null) => void
-}) => {
-  const { inventory: items, loading, setInventory, refreshData } = useContext(DataContext);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isActionLoading, setIsActionLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  
-  const handleInventoryInlineEdit = (itemId: string, field: string) => {
-    setEditingCell({ itemId, field });
-  };
-
-  const handleInventoryInlineSave = async (itemId: string, field: string, value: string) => {
-    setEditingCell(null);
-    
-    const itemToUpdate = items.find(s => s.id === itemId);
-    if (!itemToUpdate || itemToUpdate[field as keyof typeof itemToUpdate] === value) return;
-
-    const updatedData = { [field]: field === 'valor' ? Number(value) : value };
-    
-    // Optimistic update
-    setInventory(prev => prev.map(item => item.id === itemId ? { ...item, ...updatedData } : item));
-
-    try {
-      const response = await fetchWithRetry(`/api/produtos/${itemId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedData)
-      });
-      
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'Falha ao atualizar item');
-      }
-      refreshData();
-    } catch (err: any) {
-      alert(err.message);
-      refreshData();
-    }
-  };
-  
-  // Selection state
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
-  const [selectedMoto, setSelectedMoto] = useState('Todas');
-  const [onlyWithStock, setOnlyWithStock] = useState(false);
-  const [showWithPhotoFirst, setShowWithPhotoFirst] = useState(true);
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(window.innerWidth < 768 ? 10 : 25);
-
-  // Sort states
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' | null }>({
-    key: 'criado_em',
-    direction: 'desc'
-  });
-
-  // Modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [editingCell, setEditingCell] = useState<{ itemId: string, field: string } | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [bulkCategory, setBulkCategory] = useState('');
-  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState({
-    nome: '',
-    categoria: '',
-    novaCategoria: '',
-    moto: '',
-    outraMoto: '',
-    valor: '',
-    estoque: '1',
-    ano: '',
-    descricao: '',
-    ml_link: '',
-    imagem: ''
-  });
-
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshData();
-    setIsRefreshing(false);
-  };
-
-  // Extract unique categories and motos for filters
-  const categories = Array.from(new Set(items.map(item => item.categoria).filter(Boolean)));
-  const motos = Array.from(new Set(items.map(item => item.moto).filter(Boolean)));
-
-  // Sorting logic
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  // Filtering and Sorting logic
-  const filteredAndSortedItems = useMemo(() => {
-    const searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(t => t.length > 0);
-    
-    let result = [...items].filter(item => {
-      const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => 
-        (item.nome?.toLowerCase() || '').includes(term) ||
-        (item.moto?.toLowerCase() || '').includes(term) ||
-        (item.rk_id?.toLowerCase() || '').includes(term) ||
-        (item.categoria?.toLowerCase() || '').includes(term)
-      );
-      
-      const matchesCategory = selectedCategory === 'Todas' || item.categoria === selectedCategory;
-      const matchesMoto = selectedMoto === 'Todas' || item.moto === selectedMoto;
-      const matchesStock = !onlyWithStock || (item.estoque > 0);
-
-      return matchesSearch && matchesCategory && matchesMoto && matchesStock;
-    });
-
-    result.sort((a, b) => {
-      // 1. Primary Sort: sortConfig
-      if (sortConfig.key && sortConfig.direction) {
-        let aValue = a[sortConfig.key];
-        let bValue = b[sortConfig.key];
-
-        // Ordenação Natural para rk_id
-        if (sortConfig.key === 'rk_id') {
-          const aNum = parseInt(String(aValue).replace(/\D/g, ''), 10) || 0;
-          const bNum = parseInt(String(bValue).replace(/\D/g, ''), 10) || 0;
-          
-          if (aNum !== bNum) {
-            return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
-          }
-        }
-
-        if (aValue !== bValue) {
-          if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-          if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-      }
-
-      // 2. Secondary Sort: Photo priority (if enabled)
-      if (showWithPhotoFirst) {
-        const aHasPhoto = !!a.imagem;
-        const bHasPhoto = !!b.imagem;
-        if (aHasPhoto !== bHasPhoto) {
-          if (aHasPhoto && !bHasPhoto) return -1;
-          if (!aHasPhoto && bHasPhoto) return 1;
-        }
-      }
-
-      return 0;
-    });
-
-    return result;
-  }, [items, debouncedSearchTerm, selectedCategory, selectedMoto, onlyWithStock, sortConfig, showWithPhotoFirst]);
-
-  const paginatedItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedItems.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredAndSortedItems, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredAndSortedItems.length / itemsPerPage);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedMoto, onlyWithStock, itemsPerPage, showWithPhotoFirst]);
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedCategory('Todas');
-    setSelectedMoto('Todas');
-    setOnlyWithStock(false);
-    setShowWithPhotoFirst(true);
-    setSortConfig({ key: 'criado_em', direction: 'desc' });
-    setSelectedIds([]);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === paginatedItems.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(paginatedItems.map(item => item.id));
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleBulkDelete = async () => {
-    if (!selectedIds.length) return;
-    const idsToRemove = [...selectedIds];
-    setIsBulkDeleteConfirmOpen(false);
-    
-    // Optimistic update
-    setInventory(prev => prev.filter(item => !idsToRemove.includes(item.id)));
-    setSelectedIds([]);
-
-    try {
-      const response = await fetchWithRetry('/api/produtos/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToRemove })
-      });
-      
-      if (!response.ok) throw new Error('Falha ao excluir itens');
-    } catch (err: any) {
-      alert(err.message);
-      refreshData();
-    }
-  };
-
-  const handleBulkUpdateStock = async (amount: number) => {
-    if (!selectedIds.length) return;
-    const idsToUpdate = [...selectedIds];
-    
-    // Optimistic update
-    setInventory(prev => prev.map(item => {
-      if (idsToUpdate.includes(item.id)) {
-        return { ...item, estoque: Math.max(0, (item.estoque || 0) + amount) };
-      }
-      return item;
-    }));
-
-    try {
-      const response = await fetchWithRetry('/api/produtos/bulk-update-stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToUpdate, amount })
-      });
-      
-      if (!response.ok) throw new Error('Falha ao atualizar estoque');
-    } catch (err: any) {
-      alert(err.message);
-      refreshData();
-    }
-  };
-
-  const handleBulkUpdateCategory = async () => {
-    if (!selectedIds.length || !bulkCategory) return;
-    const idsToUpdate = [...selectedIds];
-    const newCategory = bulkCategory;
-    setIsCategoryModalOpen(false);
-
-    // Optimistic update
-    setInventory(prev => prev.map(item => {
-      if (idsToUpdate.includes(item.id)) {
-        return { ...item, categoria: newCategory };
-      }
-      return item;
-    }));
-    setSelectedIds([]);
-    setBulkCategory('');
-
-    try {
-      const response = await fetchWithRetry('/api/produtos/bulk-update-category', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToUpdate, categoria: newCategory })
-      });
-
-      if (!response.ok) throw new Error('Falha ao atualizar categoria');
-    } catch (err: any) {
-      setError(err.message);
-      refreshData();
-    }
-  };
-
-  useEffect(() => {
-    if (isModalOpen || isDeleteConfirmOpen || isBulkDeleteConfirmOpen || isCategoryModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isModalOpen, isDeleteConfirmOpen, isBulkDeleteConfirmOpen, isCategoryModalOpen]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
-    const payload = {
-      ...formData,
-      categoria: formData.categoria === 'nova' ? formData.novaCategoria : formData.categoria,
-      moto: formData.moto === 'outra' ? formData.outraMoto : formData.moto,
-      valor: Number(formData.valor) || 0,
-      estoque: Number(formData.estoque) || 0,
-    };
-
-    try {
-      if (editingItem) {
-        // Update
-        const response = await fetchWithRetry(`/api/produtos/${editingItem.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-          throw new Error(errorData.error || `Erro ao atualizar item (Status ${response.status})`);
-        }
-        
-        const updatedItem = await response.json();
-        setInventory(prev => prev.map(item => item.id === editingItem.id ? updatedItem : item));
-      } else {
-        // Create
-        const response = await fetchWithRetry('/api/produtos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-          throw new Error(errorData.error || `Erro ao salvar item (Status ${response.status})`);
-        }
-        
-        const newItem = await response.json();
-        setInventory(prev => [newItem, ...prev]);
-      }
-      
-      setIsModalOpen(false);
-      setEditingItem(null);
-      setFormData({
-        nome: '',
-        categoria: '',
-        novaCategoria: '',
-        moto: '',
-        outraMoto: '',
-        valor: '',
-        estoque: '1',
-        ano: '',
-        descricao: '',
-        ml_link: '',
-        imagem: ''
-      });
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setIsDeleteConfirmOpen(false);
-    const targetId = id || itemToDelete;
-    if (!targetId) return;
-    
-    // Optimistic update
-    setInventory(prev => prev.filter(item => item.id !== targetId));
-    setSelectedIds(prev => prev.filter(i => i !== targetId));
-    setItemToDelete(null);
-
-    try {
-      const response = await fetchWithRetry(`/api/produtos/${targetId}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) throw new Error('Falha ao excluir item');
-    } catch (err: any) {
-      setError(err.message);
-      refreshData();
-    }
-  };
-
-  const openEditModal = useCallback((item: any) => {
-    setEditingItem(item);
-    setFormData({
-      nome: item.nome || '',
-      categoria: item.categoria || '',
-      novaCategoria: '',
-      moto: item.moto || '',
-      outraMoto: '',
-      valor: item.valor ? item.valor.toString() : '',
-      estoque: item.estoque ? item.estoque.toString() : '1',
-      ano: item.ano || '',
-      descricao: item.descricao || '',
-      ml_link: item.ml_link || '',
-      imagem: item.imagem || ''
-    });
-    setIsModalOpen(true);
-  }, []);
-
-  // Handle pending edit from other tabs
-  useEffect(() => {
-    if (pendingEditItem && setPendingEditItem) {
-      openEditModal(pendingEditItem);
-      setPendingEditItem(null);
-    }
-  }, [pendingEditItem, setPendingEditItem, openEditModal]);
-
-  // Register actions for global access (e.g. from DetailModal)
-  useEffect(() => {
-    if (onRegisterActions) {
-      onRegisterActions({
-        edit: openEditModal,
-        delete: (id: string) => {
-          setItemToDelete(id);
-          setIsDeleteConfirmOpen(true);
-        },
-        focusSearch: () => {
-          if (searchInputRef.current) {
-            searchInputRef.current.focus();
-            searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }
-      });
-    }
-  }, [onRegisterActions, openEditModal]);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      if (window.innerWidth < 768) {
-        setViewMode('card');
-      }
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  if (loading && items.length === 0) {
-    // Não bloquear a tela
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-rose-400 gap-4">
-        <AlertCircle size={40} />
-        <p>Erro: {error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-zinc-800 rounded-lg text-white hover:bg-zinc-700 transition-colors"
-        >
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
-
-  const columns = [
-    { key: 'nome', label: 'Peça' },
-    { key: 'categoria', label: 'Categoria' },
-    { key: 'valor', label: 'Valor' },
-    { key: 'moto', label: 'Moto' },
-    { key: 'estoque', label: 'Estoque' },
-    { key: 'ano', label: 'Ano' },
-    { key: 'rk_id', label: 'ID' },
-    { key: 'descricao', label: 'Descrição' },
-    { key: 'criado_em', label: 'Criado em' },
-    { key: 'imagem', label: 'Imagem' },
-    { key: 'ml_link', label: 'ML LINK' },
-    ...(!readOnly ? [{ key: 'actions', label: 'Ações' }] : []),
-  ];
-
-  const formatCurrency = (value: any) => {
-    const num = Number(value);
-    if (isNaN(num)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(num);
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit'
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-            {/* Filtros do Estoque - Versão Elegante */}
-      <StockFilters
-        theme={theme}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
-        selectedMoto={selectedMoto}
-        setSelectedMoto={setSelectedMoto}
-        sortConfig={sortConfig}
-        setSortConfig={setSortConfig}
-        loading={loading}
-        isRefreshing={isRefreshing}
-        onRefresh={handleManualRefresh}
-        onNewItem={() => {
-          setEditingItem(null);
-          setFormData({
-            nome: '',
-            categoria: '',
-            novaCategoria: '',
-            moto: '',
-            outraMoto: '',
-            valor: '',
-            estoque: '1',
-            ano: '',
-            descricao: '',
-            ml_link: '',
-            imagem: ''
-          });
-          setIsModalOpen(true);
-        }}
-        readOnly={readOnly}
-        setCurrentPage={setCurrentPage}
-      />
-
-      {/* Bulk Actions Bar */}
-      <AnimatePresence>
-        {selectedIds.length > 0 && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className={cn(
-              "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl border transition-colors backdrop-blur-xl",
-              theme === 'dark' ? "bg-zinc-900/90 border-zinc-800 text-white" : "bg-white/90 border-zinc-200 text-zinc-900"
-            )}
-          >
-            <span className="text-sm font-medium mr-4">
-              {selectedIds.length} item(s) selecionado(s)
-            </span>
-            
-            <div className={cn("flex items-center gap-2 border-l pl-4", theme === 'dark' ? "border-zinc-800" : "border-zinc-200")}>
-              <button 
-                onClick={() => handleBulkUpdateStock(1)}
-                className={cn("p-2 rounded-lg transition-all active:scale-95 text-emerald-400", theme === 'dark' ? "hover:bg-zinc-800" : "hover:bg-zinc-100")}
-                title="Aumentar estoque"
-              >
-                <Plus size={18} />
-              </button>
-              <button 
-                onClick={() => handleBulkUpdateStock(-1)}
-                className={cn("p-2 rounded-lg transition-all active:scale-95 text-rose-400", theme === 'dark' ? "hover:bg-zinc-800" : "hover:bg-zinc-100")}
-                title="Diminuir estoque"
-              >
-                <Minus size={18} />
-              </button>
-              <button 
-                onClick={() => setIsCategoryModalOpen(true)}
-                className={cn("p-2 rounded-lg transition-all active:scale-95 text-violet-400", theme === 'dark' ? "hover:bg-zinc-800" : "hover:bg-zinc-100")}
-                title="Mudar categoria"
-              >
-                <Layers size={18} />
-              </button>
-              <button 
-                onClick={() => setIsBulkDeleteConfirmOpen(true)}
-                className={cn("p-2 rounded-lg transition-all active:scale-95 text-zinc-400", theme === 'dark' ? "hover:bg-rose-500/20 hover:text-rose-400" : "hover:bg-rose-50 hover:text-rose-600")}
-                title="Excluir selecionados"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-
-            <button 
-              onClick={() => setSelectedIds([])}
-              className={cn(
-                "ml-4 text-xs transition-colors active:scale-95",
-                theme === 'dark' ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-400 hover:text-zinc-600"
-              )}
-            >
-              Desmarcar tudo
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Table Container */}
-      <div className={cn(
-        "border rounded-2xl overflow-visible relative transition-all duration-300",
-        theme === 'dark' 
-          ? "bg-zinc-900/40 border-zinc-800/50 shadow-[0_8px_30px_rgb(0,0,0,0.12)]" 
-          : "bg-white border-zinc-200 shadow-sm"
-      )}>
-        {loading && (
-          <div className={cn(
-            "absolute inset-0 backdrop-blur-[2px] z-10 flex items-center justify-center",
-            theme === 'dark' ? "bg-zinc-950/50" : "bg-white/50"
-          )}>
-            <Loader2 className="animate-spin text-violet-500" size={32} />
-          </div>
-        )}
-        <div className={cn(
-          "p-4 md:p-6 border-b flex items-center justify-between transition-all duration-300",
-          theme === 'dark' ? "border-zinc-800/50 bg-zinc-900/10" : "border-zinc-100 bg-zinc-50/50"
-        )}>
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm",
-              theme === 'dark' ? "bg-zinc-800 text-violet-400" : "bg-white text-violet-600 border border-zinc-100"
-            )}>
-              <Box size={20} />
-            </div>
-            <div className="flex flex-col">
-              <h3 className={cn(
-                "text-lg font-bold tracking-tight transition-colors",
-                theme === 'dark' ? "text-white" : "text-zinc-900"
-              )}>Estoque de Peças</h3>
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className={cn(
-                  "text-[10px] font-bold uppercase tracking-wider",
-                  theme === 'dark' ? "text-zinc-500" : "text-zinc-400"
-                )}>Sincronizado</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-xl border backdrop-blur-md",
-            theme === 'dark' ? "bg-zinc-950/50 border-zinc-800" : "bg-white border-zinc-200"
-          )}>
-            <span className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' ? "text-zinc-500" : "text-zinc-400")}>
-              {filteredAndSortedItems.length} itens
-            </span>
-          </div>
-        </div>
-
-        {viewMode === 'table' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1200px]">
-              <thead>
-                <tr className={cn(
-                  "transition-colors",
-                  theme === 'dark' ? "bg-zinc-800/30" : "bg-zinc-50"
-                )}>
-                  <th className="px-3 py-2 w-10">
-                    <div 
-                      className={cn(
-                        "w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all",
-                        selectedIds.length === paginatedItems.length && paginatedItems.length > 0
-                          ? "bg-violet-600 border-violet-600" 
-                          : theme === 'dark' ? "border-zinc-700" : "border-zinc-300"
-                      )}
-                      onClick={toggleSelectAll}
-                    >
-                      {selectedIds.length === paginatedItems.length && paginatedItems.length > 0 && <Check className="text-white" size={10} />}
-                    </div>
-                  </th>
-                  {columns.map(col => (
-                    <th 
-                      key={col.key} 
-                      onClick={() => handleSort(col.key)}
-                      className={cn(
-                        "px-3 py-2 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all group",
-                        theme === 'dark' ? "text-zinc-500 hover:bg-zinc-800/40" : "text-zinc-500 hover:bg-zinc-100",
-                        sortConfig.key === col.key && (theme === 'dark' ? "text-violet-400 bg-violet-500/5" : "text-violet-600 bg-violet-50")
-                      )}
-                    >
-                      <div className="flex items-center gap-1">
-                        {col.label}
-                        <div className="flex flex-col text-[6px] leading-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className={cn(sortConfig.key === col.key && sortConfig.direction === 'asc' ? "text-violet-400" : "text-zinc-600")}>▲</span>
-                          <span className={cn(sortConfig.key === col.key && sortConfig.direction === 'desc' ? "text-violet-400" : "text-zinc-600")}>▼</span>
-                        </div>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className={cn(
-                "divide-y transition-colors",
-                theme === 'dark' ? "divide-zinc-800/30" : "divide-zinc-100"
-              )}>
-                {loading && items.length === 0 ? (
-                  Array(10).fill(0).map((_, i) => <SkeletonRow key={i} theme={theme} />)
-                ) : paginatedItems.map((item) => (
-                  <tr 
-                    key={item.id} 
-                    onClick={() => onSelectItem(item)}
-                    className={cn(
-                      "transition-all duration-200 group cursor-pointer",
-                      selectedIds.includes(item.id) 
-                        ? theme === 'dark' ? "bg-violet-500/10" : "bg-violet-50"
-                        : theme === 'dark' ? "hover:bg-zinc-800/20" : "hover:bg-zinc-50"
-                    )}
-                  >
-                    <td className="px-3 py-2">
-                      <div 
-                        className={cn(
-                          "w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all",
-                          selectedIds.includes(item.id) 
-                            ? "bg-violet-600 border-violet-600 opacity-100" 
-                            : cn(
-                                "opacity-0 group-hover:opacity-100",
-                                theme === 'dark' ? "border-zinc-700" : "border-zinc-300"
-                              )
-                        )}
-                        onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-                      >
-                        {selectedIds.includes(item.id) && <Check className="text-white" size={10} />}
-                      </div>
-                    </td>
-                    {columns.map(col => (
-                      <td key={`${item.id}-${col.key}`} className={cn(
-                        "px-3 py-2 text-xs transition-colors",
-                        theme === 'dark' ? "text-zinc-400" : "text-zinc-600"
-                      )} onDoubleClick={() => !readOnly && handleInventoryInlineEdit(item.id, col.key)}>
-                        {editingCell?.itemId === item.id && editingCell?.field === col.key ? (
-                          <input 
-                            defaultValue={item[col.key]}
-                            onBlur={(e) => handleInventoryInlineSave(item.id, col.key, e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleInventoryInlineSave(item.id, col.key, e.currentTarget.value);
-                              if (e.key === 'Escape') setEditingCell(null);
-                            }}
-                            autoFocus
-                            className="w-full bg-transparent border-b border-violet-500 outline-none"
-                          />
-                        ) : col.key === 'valor' ? (
-                          <span className="font-bold text-emerald-500">{formatCurrency(item[col.key])}</span>
-                        ) : col.key === 'criado_em' ? (
-                          <span className="text-[10px] text-zinc-500">{formatDate(item[col.key])}</span>
-                        ) : col.key === 'ml_link' && item[col.key] ? (
-                          <a 
-                            href={item[col.key]} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1 rounded bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 inline-block"
-                          >
-                            <ExternalLink size={12} />
-                          </a>
-                        ) : col.key === 'imagem' && item[col.key] ? (
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg overflow-hidden border relative",
-                            theme === 'dark' ? "border-zinc-800/50" : "border-zinc-200"
-                          )}>
-                            <img 
-                              loading="lazy"
-                              src={item[col.key]} 
-                              alt={item.nome} 
-                              className="w-full h-full object-cover" 
-                              referrerPolicy="no-referrer" 
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                            <div className={cn("absolute inset-0 flex items-center justify-center -z-10", theme === 'dark' ? "bg-zinc-900" : "bg-zinc-100")}>
-                              <Package size={12} className="text-zinc-400 opacity-50" />
-                            </div>
-                          </div>
-                        ) : col.key === 'categoria' ? (
-                          <span className={cn(
-                            "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors",
-                            theme === 'dark' ? "bg-violet-500/10 text-violet-400 border border-violet-500/20" : "bg-zinc-100 text-zinc-600"
-                          )}>
-                            {item[col.key]}
-                          </span>
-                        ) : col.key === 'moto' ? (
-                          <span className={cn(
-                            "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-colors",
-                            theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200"
-                          )}>
-                            {item[col.key]}
-                          </span>
-                        ) : col.key === 'actions' ? (
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditModal(item);
-                              }}
-                              className={cn(
-                                "p-2 rounded-lg transition-all",
-                                theme === 'dark' ? "bg-violet-500/10 text-violet-400 hover:bg-violet-500/20" : "text-zinc-400 hover:text-violet-600 hover:bg-violet-50"
-                              )}
-                              title="Editar item"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setItemToDelete(item.id);
-                                setIsDeleteConfirmOpen(true);
-                              }}
-                              className={cn(
-                                "p-2 rounded-lg transition-all",
-                                theme === 'dark' ? "bg-rose-500/10 text-rose-400 hover:bg-rose-500/20" : "text-zinc-400 hover:text-rose-600 hover:bg-rose-50"
-                              )}
-                              title="Excluir item"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          (typeof item[col.key] === 'number' && isNaN(item[col.key])) ? "0" : (item[col.key] || <span className="text-zinc-600 italic">-</span>)
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className={cn("p-3 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4", theme === 'dark' ? "bg-zinc-900/20" : "bg-zinc-50/50")}>
-            {loading && items.length === 0 ? (
-              Array(8).fill(0).map((_, i) => (
-                <div key={i} className={cn("h-64 rounded-2xl animate-pulse", theme === 'dark' ? "bg-zinc-800/50" : "bg-zinc-200/50")} />
-              ))
-            ) : paginatedItems.map((item) => (
-              <div 
-                key={item.id}
-                onClick={() => onSelectItem(item)}
-                className={cn(
-                  "group relative flex flex-col rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden hover:-translate-y-1 hover:shadow-xl",
-                  selectedIds.includes(item.id)
-                    ? theme === 'dark' ? "bg-violet-500/10 border-violet-500/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]" : "bg-violet-50 border-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.15)]"
-                    : theme === 'dark' ? "bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700" : "bg-white border-zinc-200 hover:border-zinc-300"
-                )}
-              >
-                {/* Selection Checkbox */}
-                <div 
-                  onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-                  className={cn(
-                    "absolute top-3 left-3 z-10 w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-200 backdrop-blur-md",
-                    selectedIds.includes(item.id)
-                      ? "bg-violet-600 border-violet-600 shadow-[0_0_10px_rgba(139,92,246,0.5)] opacity-100"
-                      : cn(
-                          "opacity-0 group-hover:opacity-100",
-                          theme === 'dark' ? "bg-zinc-900/80 border-zinc-600" : "bg-white/80 border-zinc-300"
-                        )
-                  )}
-                >
-                  {selectedIds.includes(item.id) && <Check className="text-white" size={14} strokeWidth={3} />}
-                </div>
-
-                {/* Actions Menu */}
-                {!readOnly && (
-                  <div className="absolute top-3 right-3 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(item);
-                      }}
-                      className={cn(
-                        "p-2 rounded-xl backdrop-blur-md transition-all shadow-lg",
-                        theme === 'dark' ? "bg-zinc-900/90 text-violet-400 hover:bg-violet-500 hover:text-white" : "bg-white/90 text-violet-600 hover:bg-violet-600 hover:text-white"
-                      )}
-                      title="Editar item"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setItemToDelete(item.id);
-                        setIsDeleteConfirmOpen(true);
-                      }}
-                      className={cn(
-                        "p-2 rounded-xl backdrop-blur-md transition-all shadow-lg",
-                        theme === 'dark' ? "bg-zinc-900/90 text-rose-400 hover:bg-rose-500 hover:text-white" : "bg-white/90 text-rose-600 hover:bg-rose-600 hover:text-white"
-                      )}
-                      title="Excluir item"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Image Section - Hidden on Mobile for sleek list view */}
-                <div className={cn(
-                  "hidden sm:block relative aspect-video w-full overflow-hidden border-b",
-                  theme === 'dark' ? "border-zinc-800/50 bg-zinc-950" : "border-zinc-100 bg-zinc-50"
-                )}>
-                  {item.imagem ? (
-                    <>
-                      <img 
-                        loading="lazy"
-                        src={item.imagem} 
-                        alt={item.nome} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                      <div className={cn("absolute inset-0 flex flex-col items-center justify-center -z-10", theme === 'dark' ? "bg-zinc-900" : "bg-zinc-100")}>
-                        <Package size={32} className="text-zinc-400 opacity-20" />
-                        <span className="text-[8px] uppercase font-bold tracking-widest mt-2 text-zinc-500 opacity-40">Sem Imagem</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center opacity-20">
-                      <Package size={48} />
-                    </div>
-                  )}
-                  
-                  {/* Status Badge */}
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    <span className={cn(
-                      "px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-wider shadow-md backdrop-blur-md",
-                      item.estoque > 0 
-                        ? "bg-emerald-500/90 text-white" 
-                        : "bg-rose-500/90 text-white"
-                    )}>
-                      {item.estoque > 0 ? `${item.estoque} UN` : 'ESGOTADO'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content Section */}
-                <div className="p-3 md:p-4 flex flex-col flex-1">
-                  <div className="flex justify-between items-start gap-2 mb-2">
-                    <h4 className={cn(
-                      "font-bold text-sm md:text-base leading-tight line-clamp-2",
-                      theme === 'dark' ? "text-zinc-100" : "text-zinc-900"
-                    )}>
-                      {item.nome}
-                    </h4>
-                    {/* Mobile only value display */}
-                    <span className="sm:hidden font-black text-emerald-500 text-sm whitespace-nowrap drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
-                      {formatCurrency(item.valor)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                    <span className={cn(
-                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                      theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-100"
-                    )}>
-                      {item.categoria}
-                    </span>
-                    <span className={cn(
-                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                      theme === 'dark' ? "bg-zinc-800 text-zinc-400 border-zinc-700" : "bg-zinc-100 text-zinc-500 border-zinc-200"
-                    )}>
-                      {item.moto}
-                    </span>
-                    {/* Mobile only stock badge */}
-                    <span className={cn(
-                      "sm:hidden px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                      item.estoque > 0 
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                        : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                    )}>
-                      {item.estoque > 0 ? `${item.estoque} UN` : 'ESGOTADO'}
-                    </span>
-                  </div>
-
-                  <div className="hidden sm:flex mt-auto pt-3 border-t border-zinc-800/20 items-center justify-between">
-                    <span className="font-black text-emerald-500 text-sm">
-                      {formatCurrency(item.valor)}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                      {item.rk_id}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Pagination Controls */}
-        <div className={cn(
-          "p-4 border-t flex flex-wrap items-center justify-between gap-4 transition-colors",
-          theme === 'dark' ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-        )}>
-          <div className="text-sm text-zinc-500">
-            Mostrando <span className={cn("font-medium transition-colors", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}>{(currentPage - 1) * itemsPerPage + 1}</span>-
-            <span className={cn("font-medium transition-colors", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}>{Math.min(currentPage * itemsPerPage, filteredAndSortedItems.length)}</span> de 
-            <span className={cn("font-medium transition-colors", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}> {filteredAndSortedItems.length}</span> itens
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className={cn(
-                "px-3 py-1.5 border rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm font-medium",
-                theme === 'dark' 
-                  ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
-                  : "bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              )}
-            >
-              Anterior
-            </button>
-            <span className={cn(
-              "px-3 py-1.5 text-sm font-medium",
-              theme === 'dark' ? "text-zinc-400" : "text-zinc-600"
-            )}>
-              Página {currentPage} de {totalPages}
-            </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className={cn(
-                "px-3 py-1.5 border rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm font-medium",
-                theme === 'dark' 
-                  ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800" 
-                  : "bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              )}
-            >
-              Próximo
-            </button>
-          </div>
-
-          <CustomDropdown
-            theme={theme}
-            value={itemsPerPage.toString()}
-            onChange={(val) => {
-              setItemsPerPage(Number(val));
-              setCurrentPage(1);
-            }}
-            options={[
-              { value: '25', label: '25 por página' },
-              { value: '50', label: '50 por página' },
-              { value: '100', label: '100 por página' },
-            ]}
-            className="w-40"
-          />
-        </div>
-
-        {filteredAndSortedItems.length === 0 && (
-          <div className={cn(
-            "p-12 text-center transition-colors flex flex-col items-center gap-4",
-            theme === 'dark' ? "text-zinc-500" : "text-zinc-400"
-          )}>
-            <Box size={48} strokeWidth={1} className="opacity-20" />
-            <div className="max-w-md">
-              <p className="text-sm font-medium mb-1">
-                {items.length === 0 
-                  ? "O banco de dados parece estar vazio ou não compartilhado." 
-                  : "Nenhum item corresponde aos filtros aplicados."}
-              </p>
-              {items.length === 0 && (
-                <p className="text-xs opacity-70">
-                  Certifique-se de que a Integração do Notion foi adicionada como conexão nesta página específica do Notion (Menu ... → Connections).
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modal de criação de - Slide Up Version */}
-  {/* Modal de criação / edição - Bottom Sheet */}
-  <AnimatePresence>
-    {isModalOpen && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[3000] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center"
-        onClick={() => { setIsModalOpen(false); setEditingItem(null); }}
-      >
-        <motion.div
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className={cn(
-            "relative w-full max-w-2xl h-[85vh] md:h-auto md:max-h-[80vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-2xl shadow-2xl",
-            theme === 'dark' ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Handle */}
-          <div className="flex justify-center py-2">
-            <div className="w-10 h-1.5 rounded-full bg-zinc-600/40" />
-          </div>
-
-          {/* Header */}
-          <div className={cn(
-            "sticky top-0 z-10 bg-inherit flex items-center justify-between p-4 border-b",
-            theme === 'dark' ? "border-zinc-800" : "border-zinc-200"
-          )}>
-            <h2 className="text-xl font-semibold">
-              {editingItem ? 'Editar Item' : '+ Novo Item no Estoque'}
-            </h2>
-            <button
-              onClick={() => { setIsModalOpen(false); setEditingItem(null); }}
-              className={cn(
-                "p-1 rounded-full transition-colors",
-                theme === 'dark' ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"
-              )}
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Formulário */}
-          <form onSubmit={handleSave} className="flex-1 overflow-y-auto px-4 pt-4 pb-[90px]">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-              {/* URL da Imagem */}
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">URL da Imagem</label>
-                <input
-                  type="url"
-                  value={formData.imagem}
-                  onChange={(e) => setFormData({...formData, imagem: e.target.value})}
-                  placeholder="https://..."
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* Nome */}
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome da Peça *</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                  placeholder="Ex: Relé de Partida"
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* Categoria */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Categoria</label>
-                <CustomDropdown
-                  theme={theme}
-                  variant="form"
-                  value={formData.categoria}
-                  onChange={(val) => setFormData({...formData, categoria: val})}
-                  options={[
-                    { value: '', label: 'Selecione...' },
-                    ...CATEGORIAS_OFICIAIS.map(cat => ({ value: cat, label: cat }))
-                  ]}
-                />
-              </div>
-
-              {/* Moto */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Moto</label>
-                <CustomDropdown
-                  theme={theme}
-                  variant="form"
-                  value={formData.moto}
-                  onChange={(val) => setFormData({...formData, moto: val})}
-                  options={[
-                    { value: '', label: 'Selecione...' },
-                    ...MOTOS_OFICIAIS.map(m => ({ value: m, label: m }))
-                  ]}
-                />
-              </div>
-
-              {/* Ano */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Ano</label>
-                <input
-                  type="text"
-                  value={formData.ano}
-                  onChange={(e) => setFormData({...formData, ano: e.target.value})}
-                  placeholder="Ex: 2014-2018"
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* Valor */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Valor (R$)</label>
-                <input
-                  type="number"
-                  value={formData.valor}
-                  onChange={(e) => setFormData({...formData, valor: e.target.value})}
-                  placeholder="0,00"
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* Estoque */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Estoque</label>
-                <input
-                  type="number"
-                  value={formData.estoque}
-                  onChange={(e) => setFormData({...formData, estoque: e.target.value})}
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* ML */}
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Link Mercado Livre</label>
-                <input
-                  type="url"
-                  value={formData.ml_link}
-                  onChange={(e) => setFormData({...formData, ml_link: e.target.value})}
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-              {/* Descrição */}
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
-                <textarea
-                  rows={3}
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({...formData, descricao: e.target.value})}
-                  className={cn(
-                    "w-full border rounded-xl py-2.5 px-4 text-sm resize-none",
-                    theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                  )}
-                />
-              </div>
-
-            </div>
-          </form>
-
-          {/* Bottom Actions */}
-          <div className={cn(
-            "sticky bottom-0 w-full p-4 border-t bg-inherit",
-            theme === 'dark' ? "border-zinc-800" : "border-zinc-200"
-          )}>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className={cn(
-                  "flex-1 px-6 py-3 rounded-xl",
-                  theme === 'dark'
-                    ? "bg-zinc-800 text-zinc-300"
-                    : "bg-zinc-100 text-zinc-600"
-                )}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="submit"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex-1 px-8 py-3 rounded-xl bg-violet-600 text-white flex items-center justify-center gap-2"
-              >
-                {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                {editingItem ? 'Atualizar' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-
-        </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-
-      {/* Modal de Confirmação de Exclusão Individual */}
-      <AnimatePresence>
-        {isDeleteConfirmOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className={cn(
-                "w-full max-w-md p-6 rounded-2xl border shadow-2xl",
-                theme === 'dark' ? "bg-zinc-900/90 backdrop-blur-xl border-zinc-800/50 shadow-[0_8px_30px_rgb(0,0,0,0.2)] text-white" : "bg-white border-zinc-200 text-zinc-900"
-              )}
-            >
-              <div className="flex items-center gap-4 text-rose-500 mb-4">
-                <div className="p-3 bg-rose-500/10 rounded-full">
-                  <AlertCircle size={24} />
-                </div>
-                <h3 className="text-xl font-bold">Excluir Item?</h3>
-              </div>
-              <p className={cn("mb-6", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
-                Tem certeza que deseja excluir este item do estoque? Esta ação não pode ser desfeita no Notion.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button 
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className={cn(
-                    "px-6 py-3 rounded-xl font-medium transition-all active:scale-95",
-                    theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 border border-zinc-200 text-zinc-600 hover:bg-zinc-200"
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={() => handleDelete(itemToDelete!)}
-                  className={cn(
-                    "px-8 py-3 rounded-xl font-bold transition-all active:scale-95",
-                    theme === 'dark'
-                      ? "bg-rose-600 border border-rose-500 text-white shadow-lg shadow-rose-900/20 hover:bg-rose-500"
-                      : "bg-rose-600 border border-rose-500 text-white shadow-lg shadow-rose-200/50 hover:bg-rose-700"
-                  )}
-                >
-                  Excluir
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de Confirmação de Exclusão em Massa */}
-      <AnimatePresence>
-        {isBulkDeleteConfirmOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className={cn(
-                "w-full max-w-md p-6 rounded-2xl border shadow-2xl",
-                theme === 'dark' ? "bg-zinc-900/90 backdrop-blur-xl border-zinc-800/50 shadow-[0_8px_30px_rgb(0,0,0,0.2)] text-white" : "bg-white border-zinc-200 text-zinc-900"
-              )}
-            >
-              <div className="flex items-center gap-4 text-rose-500 mb-4">
-                <div className="p-3 bg-rose-500/10 rounded-full">
-                  <Trash2 size={24} />
-                </div>
-                <h3 className="text-xl font-bold">Excluir {selectedIds.length} itens?</h3>
-              </div>
-              <p className={cn("mb-6", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
-                Tem certeza que deseja excluir permanentemente os itens selecionados?
-              </p>
-              <div className="flex justify-end gap-3">
-                <button 
-                  onClick={() => setIsBulkDeleteConfirmOpen(false)}
-                  className={cn(
-                    "px-6 py-3 rounded-xl font-medium transition-all active:scale-95",
-                    theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 border border-zinc-200 text-zinc-600 hover:bg-zinc-200"
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleBulkDelete}
-                  className={cn(
-                    "px-8 py-3 rounded-xl font-bold transition-all active:scale-95",
-                    theme === 'dark'
-                      ? "bg-rose-600 border border-rose-500 text-white shadow-lg shadow-rose-900/20 hover:bg-rose-500"
-                      : "bg-rose-600 border border-rose-500 text-white shadow-lg shadow-rose-200/50 hover:bg-rose-700"
-                  )}
-                >
-                  Excluir Tudo
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de Mudança de Categoria em Massa */}
-      <AnimatePresence>
-        {isCategoryModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className={cn(
-                "w-full max-w-md p-6 rounded-2xl border shadow-2xl",
-                theme === 'dark' ? "bg-zinc-900/90 backdrop-blur-xl border-zinc-800/50 shadow-[0_8px_30px_rgb(0,0,0,0.2)] text-white" : "bg-white border-zinc-200 text-zinc-900"
-              )}
-            >
-              <div className="flex items-center gap-4 text-violet-500 mb-4">
-                <div className="p-3 bg-violet-500/10 rounded-full">
-                  <Layers size={24} />
-                </div>
-                <h3 className="text-xl font-bold">Mudar Categoria</h3>
-              </div>
-              <p className={cn("mb-4 text-sm", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
-                Selecione ou digite a nova categoria para os {selectedIds.length} itens selecionados.
-              </p>
-              
-              <div className="space-y-4 mb-6">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nova Categoria</label>
-                  <input 
-                    type="text"
-                    value={bulkCategory}
-                    onChange={(e) => setBulkCategory(e.target.value)}
-                    placeholder="Ex: Motor, Carenagem..."
-                    className={cn(
-                      "w-full border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-violet-500 transition-colors",
-                      theme === 'dark' ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-900"
-                    )}
-                    autoFocus
-                  />
-                </div>
-                
-                {categories.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => setBulkCategory(cat)}
-                        className={cn(
-                          "px-3 py-1 rounded-full text-xs transition-colors",
-                          bulkCategory === cat 
-                            ? "bg-violet-600 text-white" 
-                            : theme === 'dark' ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                        )}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <button 
-                  onClick={() => {
-                    setIsCategoryModalOpen(false);
-                    setBulkCategory('');
-                  }}
-                  className={cn(
-                    "px-6 py-3 rounded-xl font-medium transition-all active:scale-95",
-                    theme === 'dark' ? "bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 border border-zinc-200 text-zinc-600 hover:bg-zinc-200"
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleBulkUpdateCategory}
-                  disabled={!bulkCategory}
-                  className={cn(
-                    "px-8 py-3 rounded-xl font-bold transition-all active:scale-95",
-                    theme === 'dark'
-                      ? "bg-violet-600 border border-violet-500 text-white shadow-lg shadow-violet-900/20 hover:bg-violet-500"
-                      : "bg-violet-600 border border-violet-500 text-white shadow-lg shadow-violet-200/50 hover:bg-violet-700"
-                  )}
-                >
-                  Atualizar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
-
-const SalesRow = memo(({ 
-  item, 
-  theme, 
-  selectedIds, 
-  toggleSelect, 
-  onSelectItem, 
-  handleInlineEdit, 
-  editingCell, 
-  handleSaleInlineSave, 
-  setEditingCell, 
-  columns, 
-  formatCurrency, 
-  formatDate,
-  handleEditSale,
-  setItemToDelete,
-  setIsDeleteConfirmOpen
-}: any) => (
-  <tr 
-    key={item.id} 
-    onClick={() => onSelectItem(item)}
-    className={cn(
-      "transition-all duration-200 group cursor-pointer transform-gpu",
-      selectedIds.includes(item.id) 
-        ? theme === 'dark' ? "bg-violet-500/10" : "bg-violet-50"
-        : theme === 'dark' ? "hover:bg-zinc-800/20" : "hover:bg-zinc-50"
-    )}
-  >
-    <td className="px-3 py-2">
-      <div 
-        className={cn(
-          "w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all",
-          selectedIds.includes(item.id) 
-            ? "bg-violet-600 border-violet-600 opacity-100" 
-            : cn(
-                "opacity-0 group-hover:opacity-100",
-                theme === 'dark' ? "border-zinc-700" : "border-zinc-300"
-              )
-        )}
-        onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-      >
-        {selectedIds.includes(item.id) && <Check className="text-white" size={10} />}
-      </div>
-    </td>
-    {columns.map((col: any) => (
-      <td key={`${item.id}-${col.key}`} className={cn(
-        "px-3 py-2 text-xs transition-colors",
-        theme === 'dark' ? "text-zinc-400" : "text-zinc-600"
-      )} onDoubleClick={() => handleInlineEdit(item.id, col.key)}>
-        {editingCell?.itemId === item.id && editingCell?.field === col.key ? (
-          <input 
-            defaultValue={item[col.key]}
-            onBlur={(e) => handleSaleInlineSave(item.id, col.key, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSaleInlineSave(item.id, col.key, e.currentTarget.value);
-              if (e.key === 'Escape') setEditingCell(null);
-            }}
-            autoFocus
-            className="w-full bg-transparent border-b border-violet-500 outline-none"
-          />
-        ) : col.key === 'valor' ? (
-          <span className="font-bold text-emerald-500">{formatCurrency(item[col.key])}</span>
-        ) : col.key === 'data' ? (
-          <span className="text-[10px] text-zinc-500">{formatDate(item[col.key])}</span>
-        ) : col.key === 'tipo' ? (
-          <span className={cn(
-            "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
-            theme === 'dark' ? "bg-violet-500/10 text-violet-400" : "bg-violet-50 text-violet-600"
-          )}>
-            {item[col.key]}
-          </span>
-        ) : col.key === 'actions' ? (
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEditSale(item);
-              }}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' ? "bg-violet-500/10 text-violet-400 hover:bg-violet-500/20" : "text-zinc-400 hover:text-violet-600 hover:bg-violet-50"
-              )}
-              title="Editar venda"
-            >
-              <Edit2 size={16} />
-            </button>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setItemToDelete(item.id);
-                setIsDeleteConfirmOpen(true);
-              }}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "text-zinc-400 hover:text-red-600 hover:bg-red-50"
-              )}
-              title="Excluir venda"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ) : (
-          <span className="truncate block max-w-[150px]">{item[col.key] || '-'}</span>
-        )}
-      </td>
-    ))}
-  </tr>
-));
 
 const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }: { theme: 'light' | 'dark', onSelectItem: (item: any) => void, onRegisterActions?: (actions: any) => void, isSearchOpen?: boolean }) => {
   const { sales: items, loading, refreshData, setSales } = useContext(DataContext);
@@ -4433,7 +2710,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
       moto: sale.moto || '',
       valor: sale.valor?.toString() || '',
       tipo: sale.tipo || 'Pix',
-      data: sale.data ? new Date(sale.data).toISOString().split('T')[0] : ''
+      data: sale.data ? parseLocalDate(sale.data).toISOString().split('T')[0] : ''
     });
     setIsEditModalOpen(true);
   };
@@ -4630,20 +2907,16 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
 
     if (start || end) {
       result = result.filter(item => {
-        let itemDate = new Date(item.data);
-        
-        // Se a data for apenas YYYY-MM-DD, o JS interpreta como UTC.
-        // Vamos ajustar para local para que os filtros de "Hoje" e "Ontem" funcionem.
-        if (typeof item.data === 'string' && item.data.length === 10 && item.data.includes('-')) {
-          const [y, m, d] = item.data.split('-').map(Number);
-          itemDate = new Date(y, m - 1, d);
-        }
+        const itemDate = parseLocalDate(item.data);
 
         if (start && itemDate < start) return false;
         if (end && itemDate > end) return false;
         return true;
       });
     }
+
+    // Ordena por data descendente (mais recente primeiro)
+    result.sort((a, b) => parseLocalDate(b.data).getTime() - parseLocalDate(a.data).getTime());
 
     return result;
   }, [items, debouncedSearchTerm, quickFilter, startDate, endDate, paymentType]);
@@ -4679,7 +2952,8 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('pt-BR', {
+    const d = parseLocalDate(dateString);
+    return d.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
       year: 'numeric'
@@ -4687,7 +2961,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
   };
 
   if (loading && items.length === 0) {
-    // Não bloquear a tela
+    // NÃ£o bloquear a tela
   }
 
   return (
@@ -4706,7 +2980,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           <input 
             ref={searchInputRef}
             type="text" 
-            placeholder="Buscar por peça, moto ou ID..." 
+            placeholder="Buscar por peÃ§a, moto ou ID..." 
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -4721,7 +2995,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           />
         </div>
 
-        {/* Filtros e Ações Compactos */}
+        {/* Filtros e AÃ§Ãµes Compactos */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <CustomDropdown
@@ -4780,7 +3054,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           </div>
         </div>
       </div>
-        {/* Filtros Rápidos e Período */}
+        {/* Filtros RÃ¡pidos e PerÃ­odo */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4 border-t border-zinc-800/30">
           <div className="flex flex-wrap items-center gap-2">
             {[
@@ -4788,7 +3062,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               { id: 'today', label: 'Hoje' },
               { id: 'yesterday', label: 'Ontem' },
               { id: 'this-week', label: 'Semana' },
-              { id: 'this-month', label: 'Mês' },
+              { id: 'this-month', label: 'MÃªs' },
               { id: 'last-30-days', label: '30 Dias' },
             ].map((filter) => (
               <button
@@ -4829,7 +3103,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   theme === 'dark' ? "text-zinc-200" : "text-zinc-900"
                 )}
               />
-              <span className="text-zinc-500 text-xs">até</span>
+              <span className="text-zinc-500 text-xs">atÃ©</span>
               <input 
                 type="date"
                 value={endDate}
@@ -4888,13 +3162,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       {selectedIds.length === paginatedItems.length && paginatedItems.length > 0 && <Check className="text-white" size={14} />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Peça</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">PeÃ§a</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Moto</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-emerald-500">Valor</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Tipo</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Data</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">ID</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">AÃ§Ãµes</th>
                 </tr>
             </thead>
             <tbody className={cn(
@@ -4974,11 +3248,11 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                     ) : (
                       <span className={cn(
                         "text-sm font-black font-sans transition-all duration-300",
-                        (item.tipo?.toUpperCase() === 'SAÍDA')
+                        (item.tipo?.toUpperCase() === 'SAÃDA')
                           ? "text-rose-500 [text-shadow:0_0_10px_rgba(244,63,94,0.5)]"
                           : "text-emerald-500 [text-shadow:0_0_10px_rgba(16,185,129,0.5)]"
                       )}>
-                        {item.tipo?.toUpperCase() === 'SAÍDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
+                        {item.tipo?.toUpperCase() === 'SAÃDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
                       </span>
                     )}
                   </td>
@@ -4987,10 +3261,10 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       <span className={cn(
                         "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm transition-colors",
                         item.tipo.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
-                        item.tipo.toUpperCase() === 'SAÍDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
+                        item.tipo.toUpperCase() === 'SAÃDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
                         item.tipo.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                        item.tipo.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                        item.tipo.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                        item.tipo.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                        item.tipo.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                         item.tipo.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                         item.tipo.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                         (theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200")
@@ -5112,11 +3386,11 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <span className={cn(
                   "text-lg font-black font-sans transition-all duration-300",
-                  (item.tipo?.toUpperCase() === 'SAÍDA')
+                  (item.tipo?.toUpperCase() === 'SAÃDA')
                     ? "text-rose-500 [text-shadow:0_0_10px_rgba(244,63,94,0.5)]"
                     : "text-emerald-500 [text-shadow:0_0_10px_rgba(16,185,129,0.5)]"
                 )}>
-                  {item.tipo?.toUpperCase() === 'SAÍDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
+                  {item.tipo?.toUpperCase() === 'SAÃDA' ? '-' : ''}{formatCurrency(Math.abs(item.valor))}
                 </span>
               </div>
               
@@ -5125,10 +3399,10 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   <div className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm flex items-center gap-1.5",
                     item.tipo.toUpperCase() === 'PIX' ? (theme === 'dark' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") :
-                    item.tipo.toUpperCase() === 'SAÍDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
+                    item.tipo.toUpperCase() === 'SAÃDA' ? (theme === 'dark' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-rose-50 text-rose-600 border-rose-200") :
                     item.tipo.toUpperCase() === 'DINHEIRO' ? (theme === 'dark' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-green-50 text-green-600 border-green-200") :
-                    item.tipo.toUpperCase() === 'CRÉDITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
-                    item.tipo.toUpperCase() === 'DÉBITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
+                    item.tipo.toUpperCase() === 'CRÃ‰DITO' ? (theme === 'dark' ? "bg-orange-500/10 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-600 border-orange-200") :
+                    item.tipo.toUpperCase() === 'DÃ‰BITO' ? (theme === 'dark' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200") :
                     item.tipo.toUpperCase() === 'MARCELO' ? (theme === 'dark' ? "bg-violet-500/10 text-violet-400 border-violet-500/20" : "bg-violet-50 text-violet-600 border-violet-200") :
                     item.tipo.toUpperCase().includes('MERCADO LIVRE') ? (theme === 'dark' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200") :
                     (theme === 'dark' ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200")
@@ -5190,7 +3464,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="text-xs font-bold text-zinc-400">Página {currentPage} de {totalPages}</span>
+          <span className="text-xs font-bold text-zinc-400">PÃ¡gina {currentPage} de {totalPages}</span>
           <button 
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages || totalPages === 0}
@@ -5230,13 +3504,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Registrar Venda</h2>
-                  <p className="text-sm text-zinc-500">Adicione os detalhes da nova transação</p>
+                  <p className="text-sm text-zinc-500">Adicione os detalhes da nova transaÃ§Ã£o</p>
                 </div>
               </div>
 
               <form onSubmit={handleSaveSale} className="space-y-5">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nova Movimentação</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nova MovimentaÃ§Ã£o</label>
                   <input 
                     required
                     type="text" 
@@ -5245,7 +3519,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                       const novoNome = e.target.value;
                       setFormData(prev => {
                         const novoEstado = {...prev, nome: novoNome};
-                        // Lógica de extração automática
+                        // LÃ³gica de extraÃ§Ã£o automÃ¡tica
                         if (novoNome.length < 3) {
                           novoEstado.moto = '';
                           novoEstado.categoria = '';
@@ -5314,7 +3588,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                         { value: '', label: 'Selecione...' },
                         ...PAGAMENTOS_OFICIAIS.map(p => ({ value: p, label: p })),
                         { value: 'VENDA MERCADO LIVRE', label: 'VENDA MERCADO LIVRE' },
-                        { value: 'SAÍDA', label: 'SAÍDA' },
+                        { value: 'SAÃDA', label: 'SAÃDA' },
                       ]}
                     />
                   </div>
@@ -5390,13 +3664,13 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Editar Venda</h2>
-                  <p className="text-sm text-zinc-500">Atualize os detalhes da transação</p>
+                  <p className="text-sm text-zinc-500">Atualize os detalhes da transaÃ§Ã£o</p>
                 </div>
               </div>
 
               <form onSubmit={handleUpdateSale} className="space-y-5">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peça Vendida</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§a Vendida</label>
                   <input 
                     required
                     type="text" 
@@ -5454,7 +3728,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                         { value: '', label: 'Selecione...' },
                         ...PAGAMENTOS_OFICIAIS.map(p => ({ value: p, label: p })),
                         { value: 'VENDA MERCADO LIVRE', label: 'VENDA MERCADO LIVRE' },
-                        { value: 'SAÍDA', label: 'SAÍDA' },
+                        { value: 'SAÃDA', label: 'SAÃDA' },
                       ]}
                     />
                   </div>
@@ -5495,7 +3769,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
                   )}
                 >
                   {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  Salvar Alterações
+                  Salvar AlteraÃ§Ãµes
                 </button>
               </div>
             </form>
@@ -5504,7 +3778,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmação Exclusão Individual */}
+      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o Individual */}
       <AnimatePresence>
         {isDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -5522,7 +3796,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir Venda?</h3>
               <p className="text-zinc-500 text-sm mb-8">
-                Esta ação não pode ser desfeita. A venda será removida permanentemente do Notion.
+                Esta aÃ§Ã£o nÃ£o pode ser desfeita. A venda serÃ¡ removida permanentemente do Notion.
               </p>
               <div className="flex items-center gap-3">
                 <button 
@@ -5552,7 +3826,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmação Exclusão em Massa */}
+      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o em Massa */}
       <AnimatePresence>
         {isBulkDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -5570,7 +3844,7 @@ const SalesView = memo(({ theme, onSelectItem, onRegisterActions, isSearchOpen }
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir {selectedIds.length} Vendas?</h3>
               <p className="text-zinc-500 text-sm mb-8">
-                Esta ação removerá permanentemente todas as vendas selecionadas do Notion.
+                Esta aÃ§Ã£o removerÃ¡ permanentemente todas as vendas selecionadas do Notion.
               </p>
               <div className="flex items-center gap-3">
                 <button 
@@ -5795,7 +4069,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             )}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className={cn("text-lg font-black", theme === 'dark' ? "text-white" : "text-zinc-900")}>Filtros e Ordenação</h3>
+              <h3 className={cn("text-lg font-black", theme === 'dark' ? "text-white" : "text-zinc-900")}>Filtros e OrdenaÃ§Ã£o</h3>
               <button onClick={() => setIsFilterModalOpen(false)} className={cn("p-2 rounded-full", theme === 'dark' ? "hover:bg-zinc-800" : "hover:bg-zinc-100")}>
                 <X size={20} />
               </button>
@@ -5835,7 +4109,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
               )}
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Ordenação</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">OrdenaÃ§Ã£o</label>
                 <CustomDropdown
                   theme={theme}
                   icon={<ArrowDownAZ size={14} />}
@@ -5843,8 +4117,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   className="w-full"
                   onChange={(val) => setSortOrder(val)}
                   options={[
-                    { value: "Data de Criação", label: "Mais recente" },
-                    { value: "Data de Criação Antigo", label: "Mais antigo" },
+                    { value: "Data de CriaÃ§Ã£o", label: "Mais recente" },
+                    { value: "Data de CriaÃ§Ã£o Antigo", label: "Mais antigo" },
                     { value: "Nome", label: "Nome" },
                     { value: "Mais baratas", label: "Mais baratas" },
                     { value: "Mais caras", label: "Mais caras" },
@@ -5899,41 +4173,41 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Função para lidar com seleção de arquivos
+  // FunÃ§Ã£o para lidar com seleÃ§Ã£o de arquivos
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       // Limitar a 15 arquivos
       if (files.length + selectedFiles.length > 15) {
-        alert('Máximo de 15 fotos permitido');
+        alert('MÃ¡ximo de 15 fotos permitido');
         return;
       }
       setSelectedFiles(prev => [...prev, ...files]);
     }
   };
 
-  // Função para remover arquivo selecionado
+  // FunÃ§Ã£o para remover arquivo selecionado
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Função para fazer upload dos arquivos
+  // FunÃ§Ã£o para fazer upload dos arquivos
   const uploadFiles = async (isEdit: boolean = false) => {
     if (selectedFiles.length === 0) return;
     
     const uploadedUrls = await performUpload();
     if (uploadedUrls.length > 0) {
       if (isEdit && editingMoto) {
-        console.log('🎉 Todas as imagens enviadas:', uploadedUrls);
+        console.log('ðŸŽ‰ Todas as imagens enviadas:', uploadedUrls);
 
         // 3. ATUALIZAR A MOTO COM AS NOVAS IMAGENS
         // PEGAR AS IMAGENS EXISTENTES + AS NOVAS
         const imagensExistentes = editFormData.imagens || [];
         const todasImagens = [...imagensExistentes, ...uploadedUrls];
 
-        console.log('📸 Imagens que serão salvas:', todasImagens);
+        console.log('ðŸ“¸ Imagens que serÃ£o salvas:', todasImagens);
 
-        // Preparar os dados para atualização
+        // Preparar os dados para atualizaÃ§Ã£o
         const motoData = {
           nome: editFormData.nome,
           marca: editFormData.marca,
@@ -5947,10 +4221,10 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           pecas_retiradas: editFormData.pecas_retiradas,
           status: editFormData.status,
           descricao: editFormData.descricao,
-          imagens: todasImagens // ← IMPORTANTE: incluir as imagens aqui
+          imagens: todasImagens // â† IMPORTANTE: incluir as imagens aqui
         };
 
-        console.log('📤 Enviando atualização com imagens:', motoData);
+        console.log('ðŸ“¤ Enviando atualizaÃ§Ã£o com imagens:', motoData);
 
         try {
           const updateResponse = await fetchWithRetry(`/api/motos/${editingMoto.id}`, {
@@ -5964,8 +4238,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           try {
             result = JSON.parse(responseText);
           } catch (e) {
-            console.error('❌ Resposta inválida do servidor:', responseText.substring(0, 200));
-            throw new Error('O servidor retornou um formato inválido (HTML em vez de JSON).');
+            console.error('âŒ Resposta invÃ¡lida do servidor:', responseText.substring(0, 200));
+            throw new Error('O servidor retornou um formato invÃ¡lido (HTML em vez de JSON).');
           }
 
           if (result.success) {
@@ -5975,13 +4249,13 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
               imagens: todasImagens,
               imagem: prev.imagem || todasImagens[0] || ''
             }));
-            alert('✅ Imagens salvas com sucesso!');
+            alert('âœ… Imagens salvas com sucesso!');
           } else {
-            alert('❌ Erro ao salvar imagens no banco: ' + result.error);
+            alert('âŒ Erro ao salvar imagens no banco: ' + result.error);
           }
         } catch (error) {
-          console.error('Erro ao atualizar moto após upload:', error);
-          alert('❌ Erro de conexão ao salvar imagens.');
+          console.error('Erro ao atualizar moto apÃ³s upload:', error);
+          alert('âŒ Erro de conexÃ£o ao salvar imagens.');
         }
       } else {
         setFormData(prev => {
@@ -6062,7 +4336,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
       return successfulUrls;
     } catch (error: any) {
       console.error('Erro no upload:', error);
-      alert('❌ Erro ao enviar fotos: ' + (error as Error).message);
+      alert('âŒ Erro ao enviar fotos: ' + (error as Error).message);
       return [];
     } finally {
       setUploading(false);
@@ -6122,7 +4396,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   const [brandFilter, setBrandFilter] = useState('Todas');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [cilindradaFilter, setCilindradaFilter] = useState('Todas');
-  const [sortOrder, setSortOrder] = useState('Data de Criação');
+  const [sortOrder, setSortOrder] = useState('Data de CriaÃ§Ã£o');
   const [anoMinFilter, setAnoMinFilter] = useState('');
   const [valorMinFilter, setValorMinFilter] = useState('');
   const [valorMaxFilter, setValorMaxFilter] = useState('');
@@ -6147,7 +4421,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
   const getStatusColor = (status: string, isBadge: boolean = false) => {
     switch (status) {
-      case 'Disponível':
+      case 'DisponÃ­vel':
         return isBadge ? "bg-emerald-500 text-white" : "bg-emerald-500/10 text-emerald-500";
       case 'Desmontada':
         return isBadge ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-500";
@@ -6266,7 +4540,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
     setIsSaving(true);
 
     try {
-      // Upload automático se houver arquivos pendentes
+      // Upload automÃ¡tico se houver arquivos pendentes
       let currentImagens = [...editFormData.imagens];
       let currentImagem = editFormData.imagem;
 
@@ -6280,7 +4554,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
       const motoId = editingMoto.id;
       
-      // Garantir que os campos obrigatórios estejam presentes e formatados
+      // Garantir que os campos obrigatÃ³rios estejam presentes e formatados
       const payload = {
         nome: editFormData.nome || editingMoto.nome,
         marca: editFormData.marca || editingMoto.marca,
@@ -6297,7 +4571,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         imagens: currentImagens
       };
       
-      console.log('📤 Enviando atualização:', payload);
+      console.log('ðŸ“¤ Enviando atualizaÃ§Ã£o:', payload);
       
       const response = await fetchWithRetry(`/api/motos/${motoId}`, {
         method: 'PATCH',
@@ -6306,7 +4580,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
       });
       
       const result = await response.json();
-      console.log('📥 Resposta do servidor:', result);
+      console.log('ðŸ“¥ Resposta do servidor:', result);
       
       if (result.success) {
         // Atualizar o estado local com os dados retornados do servidor
@@ -6369,7 +4643,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Upload automático se houver arquivos pendentes
+      // Upload automÃ¡tico se houver arquivos pendentes
       let currentImagens = [...formData.imagens];
       let currentImagem = formData.imagem;
 
@@ -6429,7 +4703,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   }, [items]);
 
   const statuses = useMemo(() => {
-    const s = new Set(['Disponível', 'Em estoque', 'Desmontada', 'Vendida']);
+    const s = new Set(['DisponÃ­vel', 'Em estoque', 'Desmontada', 'Vendida']);
     items.forEach(item => {
       if (item.status) s.add(item.status);
     });
@@ -6487,20 +4761,20 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
     // Ordenar
     result.sort((a, b) => {
-      // 1. Prioridade Máxima: Vendidas sempre para o final
+      // 1. Prioridade MÃ¡xima: Vendidas sempre para o final
       const aIsSold = a.status === 'Vendida';
       const bIsSold = b.status === 'Vendida';
       if (aIsSold && !bIsSold) return 1;
       if (!aIsSold && bIsSold) return -1;
 
-      // 2. Prioridade Secundária: Com fotos no topo (se não for vendida)
+      // 2. Prioridade SecundÃ¡ria: Com fotos no topo (se nÃ£o for vendida)
       const aHasPhotos = (a.imagens && a.imagens.length > 0) || (a.imagem && a.imagem !== '');
       const bHasPhotos = (b.imagens && b.imagens.length > 0) || (b.imagem && b.imagem !== '');
       
       if (aHasPhotos && !bHasPhotos) return -1;
       if (!aHasPhotos && bHasPhotos) return 1;
 
-      // 3. Ordenação selecionada
+      // 3. OrdenaÃ§Ã£o selecionada
       let comparison = 0;
       switch (sortOrder) {
         case 'Mais baratas':
@@ -6518,10 +4792,10 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         case 'Nome':
           comparison = (a.nome || '').localeCompare(b.nome || '');
           break;
-        case 'Data de Criação':
+        case 'Data de CriaÃ§Ã£o':
           comparison = new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime();
           break;
-        case 'Data de Criação Antigo':
+        case 'Data de CriaÃ§Ã£o Antigo':
           comparison = new Date(a.criado_em || 0).getTime() - new Date(b.criado_em || 0).getTime();
           break;
         case 'Ano':
@@ -6531,7 +4805,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           comparison = (a.lote || '').localeCompare(b.lote || '');
           break;
         default:
-          // Default: Recentemente adicionadas (Data de Criação desc)
+          // Default: Recentemente adicionadas (Data de CriaÃ§Ã£o desc)
           comparison = new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime();
       }
       
@@ -6558,7 +4832,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
   };
 
   if (loading && items.length === 0) {
-    // Não bloquear a tela
+    // NÃ£o bloquear a tela
   }
 
   return (
@@ -6592,7 +4866,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           />
         </div>
 
-        {/* Ações (Refresh, Nova Moto) */}
+        {/* AÃ§Ãµes (Refresh, Nova Moto) */}
         <div className="flex items-center justify-end mt-1">
           <div className="flex items-center gap-2">
             {!readOnly && (
@@ -6629,7 +4903,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         <FilterModal />
       </div>
 
-      {/* Filtros e Ordenação (Fora da div principal) */}
+      {/* Filtros e OrdenaÃ§Ã£o (Fora da div principal) */}
       <div className="flex flex-col gap-4 mt-2 px-1">
         {/* Row for Brand Filter */}
         <div className="flex flex-col gap-2">
@@ -6657,8 +4931,8 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Ordenar por</span>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 md:mx-0 md:px-0">
             {[
-              { value: "Data de Criação", label: "Mais recente" },
-              { value: "Data de Criação Antigo", label: "Mais antigo" },
+              { value: "Data de CriaÃ§Ã£o", label: "Mais recente" },
+              { value: "Data de CriaÃ§Ã£o Antigo", label: "Mais antigo" },
               { value: "Nome", label: "Nome" },
               { value: "Mais baratas", label: "Mais baratas" },
               { value: "Mais caras", label: "Mais caras" },
@@ -6684,7 +4958,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         </div>
       </div>
 
-      {/* Filtros Secundários Compactos */}
+      {/* Filtros SecundÃ¡rios Compactos */}
       {!readOnly && (
         <div className={cn(
           "flex flex-wrap items-center gap-3 p-2 px-3 rounded-2xl border transition-all duration-300 overflow-visible",
@@ -6711,7 +4985,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Ano:</span>
             <input 
               type="number"
-              placeholder="Mín"
+              placeholder="MÃ­n"
               value={anoMinFilter}
               onChange={(e) => {
                 setAnoMinFilter(e.target.value);
@@ -6817,7 +5091,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Lote</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Valor</th>
-                  {!readOnly && <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>}
+                  {!readOnly && <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">AÃ§Ãµes</th>}
                 </tr>
               </thead>
               <tbody className={cn(
@@ -6943,7 +5217,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                           value={inlineEditData.status} 
                           onChange={(val) => setInlineEditData({...inlineEditData, status: val})}
                           options={[
-                            { value: 'Disponível', label: 'Disponível' },
+                            { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
                             { value: 'Em estoque', label: 'Em estoque' },
                             { value: 'Desmontada', label: 'Desmontada' },
                             { value: 'Vendida', label: 'Vendida' },
@@ -7059,7 +5333,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs font-bold text-zinc-400">Página {currentPage} de {totalPages}</span>
+            <span className="text-xs font-bold text-zinc-400">PÃ¡gina {currentPage} de {totalPages}</span>
             <button 
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
@@ -7097,14 +5371,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Nova Moto</h2>
-                    <p className="text-sm text-zinc-500">Adicione uma nova moto ao catálogo</p>
+                    <p className="text-sm text-zinc-500">Adicione uma nova moto ao catÃ¡logo</p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                   <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/Título</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/TÃ­tulo</label>
                     <input required type="text" value={formData.nome} onChange={(e) => setFormData({...formData, nome: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                   </div>
                   <div className="space-y-1">
@@ -7149,7 +5423,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                       value={formData.status}
                       onChange={(val) => setFormData({...formData, status: val})}
                       options={[
-                        { value: 'Disponível', label: 'Disponível' },
+                        { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
                         { value: 'Em estoque', label: 'Em estoque' },
                         { value: 'Desmontada', label: 'Desmontada' },
                         { value: 'Vendida', label: 'Vendida' },
@@ -7162,14 +5436,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peças Retiradas</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§as Retiradas</label>
                   <input type="text" value={formData.pecas_retiradas} onChange={(e) => setFormData({...formData, pecas_retiradas: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (Máx 15)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (MÃ¡x 15)</label>
                   
-                  {/* Imagens já salvas */}
+                  {/* Imagens jÃ¡ salvas */}
                   {formData.imagens.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -7203,7 +5477,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
 
-                  {/* Pré-visualização das imagens selecionadas */}
+                  {/* PrÃ©-visualizaÃ§Ã£o das imagens selecionadas */}
                   {selectedFiles.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -7241,7 +5515,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
                   
-                  {/* Botão de adicionar fotos */}
+                  {/* BotÃ£o de adicionar fotos */}
                   <div className="flex items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -7275,12 +5549,12 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-widest">
-                    Selecione imagens do seu computador (máx 15)
+                    Selecione imagens do seu computador (mÃ¡x 15)
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">DescriÃ§Ã£o</label>
                   <textarea rows={3} value={formData.descricao} onChange={(e) => setFormData({...formData, descricao: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
               </div>
@@ -7340,14 +5614,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Editar Moto</h2>
-                    <p className="text-sm text-zinc-500">Atualize as informações da moto</p>
+                    <p className="text-sm text-zinc-500">Atualize as informaÃ§Ãµes da moto</p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                   <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/Título</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Nome/TÃ­tulo</label>
                     <input required type="text" value={editFormData.nome} onChange={(e) => setEditFormData({...editFormData, nome: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                   </div>
                   <div className="space-y-1">
@@ -7392,7 +5666,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                       value={editFormData.status}
                       onChange={(val) => setEditFormData({...editFormData, status: val})}
                       options={[
-                        { value: 'Disponível', label: 'Disponível' },
+                        { value: 'DisponÃ­vel', label: 'DisponÃ­vel' },
                         { value: 'Em estoque', label: 'Em estoque' },
                         { value: 'Desmontada', label: 'Desmontada' },
                         { value: 'Vendida', label: 'Vendida' },
@@ -7405,14 +5679,14 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Peças Retiradas</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">PeÃ§as Retiradas</label>
                   <input type="text" value={editFormData.pecas_retiradas} onChange={(e) => setEditFormData({...editFormData, pecas_retiradas: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (Máx 15)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Fotos (MÃ¡x 15)</label>
                   
-                  {/* Imagens já salvas */}
+                  {/* Imagens jÃ¡ salvas */}
                   {editFormData.imagens.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -7446,7 +5720,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
 
-                  {/* Pré-visualização das imagens selecionadas */}
+                  {/* PrÃ©-visualizaÃ§Ã£o das imagens selecionadas */}
                   {selectedFiles.length > 0 && (
                     <Reorder.Group 
                       axis="x" 
@@ -7484,7 +5758,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     </Reorder.Group>
                   )}
                   
-                  {/* Botão de adicionar fotos */}
+                  {/* BotÃ£o de adicionar fotos */}
                   <div className="flex items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -7518,12 +5792,12 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                   </div>
                   
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-widest">
-                    Selecione imagens do seu computador (máx 15)
+                    Selecione imagens do seu computador (mÃ¡x 15)
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">DescriÃ§Ã£o</label>
                   <textarea rows={3} value={editFormData.descricao} onChange={(e) => setEditFormData({...editFormData, descricao: e.target.value})} className={cn("w-full border rounded-xl py-2 px-4 text-sm", theme === 'dark' ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200")} />
                 </div>
               </div>
@@ -7550,7 +5824,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                     )}
                   >
                     {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                    Salvar Alterações
+                    Salvar AlteraÃ§Ãµes
                   </button>
                 </div>
               </form>
@@ -7559,7 +5833,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmação Exclusão */}
+      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o */}
       <AnimatePresence>
         {isDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -7568,7 +5842,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                 <Trash2 size={32} />
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir Moto?</h3>
-              <p className="text-zinc-500 text-sm mb-8">Esta ação não pode ser desfeita. A moto será removida do Notion.</p>
+              <p className="text-zinc-500 text-sm mb-8">Esta aÃ§Ã£o nÃ£o pode ser desfeita. A moto serÃ¡ removida do Notion.</p>
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsDeleteConfirmOpen(false)} 
@@ -7628,7 +5902,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmação Exclusão em Massa */}
+      {/* Modal ConfirmaÃ§Ã£o ExclusÃ£o em Massa */}
       <AnimatePresence>
         {isBulkDeleteConfirmOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -7637,7 +5911,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                 <Trash2 size={32} />
               </div>
               <h3 className="text-xl font-bold mb-2">Excluir {selectedIds.length} Motos?</h3>
-              <p className="text-zinc-500 text-sm mb-8">Esta ação removerá permanentemente todas as motos selecionadas.</p>
+              <p className="text-zinc-500 text-sm mb-8">Esta aÃ§Ã£o removerÃ¡ permanentemente todas as motos selecionadas.</p>
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsBulkDeleteConfirmOpen(false)} 
@@ -7677,20 +5951,20 @@ const formatRelativeTime = (dateString: string) => {
 
   if (diffInDays === 0) return 'hoje';
   if (diffInDays === 1) return 'ontem';
-  if (diffInDays < 30) return `há ${diffInDays} dias`;
+  if (diffInDays < 30) return `hÃ¡ ${diffInDays} dias`;
   const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths === 1) return 'há 1 mês';
-  return `há ${diffInMonths} meses`;
+  if (diffInMonths === 1) return 'hÃ¡ 1 mÃªs';
+  return `hÃ¡ ${diffInMonths} meses`;
 };
 
 import { Login } from './components/Login';
 
 export default function App() {
   const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); // Modificado para aceitar usuário Supabase
+  const [currentUser, setCurrentUser] = useState<any>(null); // Modificado para aceitar usuÃ¡rio Supabase
 
   useEffect(() => {
-    // Escuta mudanças de sessão baseadas no novo Custom Auth (SQLite na Vercel/Cloud Run via JWT local)
+    // Escuta mudanÃ§as de sessÃ£o baseadas no novo Custom Auth (SQLite na Vercel/Cloud Run via JWT local)
     const checkAuthStatus = () => {
       const token = localStorage.getItem('auth_token');
       const role = localStorage.getItem('user_role');
@@ -7714,7 +5988,7 @@ export default function App() {
       }
     };
 
-    // Verificar na inicialização
+    // Verificar na inicializaÃ§Ã£o
     checkAuthStatus();
 
     // Escutar eventos de login bem sucedido disparados pelo componente Login.tsx
@@ -7731,7 +6005,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      // Remover chamadas de logout do supabase, já que não usamos mais o auth dele
+      // Remover chamadas de logout do supabase, jÃ¡ que nÃ£o usamos mais o auth dele
     } catch (error) {
     }
     localStorage.removeItem('auth_token');
@@ -7989,12 +6263,12 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
                   <span className="px-3 py-1 bg-violet-500/10 text-violet-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-violet-500/20">
-                    {item.categoria || (isSale ? 'Venda' : (item.marca ? 'Moto' : 'Peça'))}
+                    {item.categoria || (isSale ? 'Venda' : (item.marca ? 'Moto' : 'PeÃ§a'))}
                   </span>
                   {(item.status || item.tipo) && (
                     <span className={cn(
                       "px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border",
-                      (item.status === 'Disponível' || item.status === 'DISPONÍVEL' || item.status === 'Ativo' || (isSale && item.tipo !== 'SAÍDA'))
+                      (item.status === 'DisponÃ­vel' || item.status === 'DISPONÃVEL' || item.status === 'Ativo' || (isSale && item.tipo !== 'SAÃDA'))
                         ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                         : "bg-rose-500/10 text-rose-500 border-rose-500/20"
                     )}>
@@ -8011,7 +6285,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
 
               <div className={cn(
                 "text-4xl md:text-5xl font-black tracking-tighter transition-all duration-500",
-                item.tipo === 'SAÍDA' ? "text-rose-500" : "text-emerald-500"
+                item.tipo === 'SAÃDA' ? "text-rose-500" : "text-emerald-500"
               )}>
                 {formatCurrency(itemValue)}
               </div>
@@ -8058,7 +6332,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
                     theme === 'dark' ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50 border-zinc-100"
                   )}>
                     <h4 className="text-[10px] font-black uppercase text-violet-400 tracking-[0.1em] flex items-center gap-2">
-                      <Wrench size={14} /> Peças Retiradas
+                      <Wrench size={14} /> PeÃ§as Retiradas
                     </h4>
                     <p className={cn("text-sm leading-relaxed", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
                       {item.pecas_retiradas}
@@ -8071,7 +6345,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
                     theme === 'dark' ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50 border-zinc-100"
                   )}>
                     <h4 className="text-[10px] font-black uppercase text-amber-400 tracking-[0.1em] flex items-center gap-2">
-                      <FileText size={14} /> Observações
+                      <FileText size={14} /> ObservaÃ§Ãµes
                     </h4>
                     <p className={cn("text-sm leading-relaxed", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>
                       {item.descricao || item.observacoes}
@@ -8081,7 +6355,7 @@ const DetailModal = ({ item, onClose, theme, userRole, onEdit, onDelete }: {
               </div>
             )}
 
-            {/* Ações */}
+            {/* AÃ§Ãµes */}
             <div className="flex flex-col gap-3 pt-4">
               <button 
                 onClick={handleWhatsAppShare}
@@ -8247,7 +6521,7 @@ const MotoCard = React.memo(({ item, theme, onSelectItem, handleEditMoto, setIte
 
   const handleMouseLeave = () => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    // Volta instantaneamente a disparar o reset, mas a transição suave é mantida pelo CSS
+    // Volta instantaneamente a disparar o reset, mas a transiÃ§Ã£o suave Ã© mantida pelo CSS
     setCurrentImageIndex(0);
   };
 
@@ -8523,7 +6797,7 @@ const LogoutModal = memo(({ isOpen, onClose, onLogout, theme }: { isOpen: boolea
           Sair da Conta?
         </h2>
         <p className="text-zinc-500 text-sm font-medium mb-8">
-          Tem certeza que deseja encerrar sua sessão atual? Você precisará entrar novamente.
+          Tem certeza que deseja encerrar sua sessÃ£o atual? VocÃª precisarÃ¡ entrar novamente.
         </p>
         <div className="flex flex-col gap-3">
           <button 
@@ -8562,7 +6836,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       return (path && ['dashboard', 'estoque', 'vendas', 'motos', 'catalogo', 'atendimento', 'frete', 'clients', 'mercadolivre', 'users', 'audit'].includes(path)) ? path as any : 'dashboard';
     }
     
-    // Se for cliente, abre sempre no catálogo
+    // Se for cliente, abre sempre no catÃ¡logo
     return 'catalogo';
   });
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
@@ -8643,7 +6917,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
 
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
-  // Atualiza a foto de perfil quando o usuário muda
+  // Atualiza a foto de perfil quando o usuÃ¡rio muda
   useEffect(() => {
     const phone = localStorage.getItem('user_phone');
     if (phone) {
@@ -8656,7 +6930,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
   useEffect(() => {
     if (!currentUser) return;
 
-    // Notificações
+    // NotificaÃ§Ãµes
     const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(20));
     const unsubscribeNotifications = onSnapshot(q, (snapshot) => {
       const newNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -8686,7 +6960,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
   }, [showAllMlAds, showPaymentFilter, isBudgetModalOpen, isLogoutModalOpen, selectedDetailItem, isAnyModalOpen]);
   const [isMlListingsLoading, setIsMlListingsLoading] = useState(false);
   
-  // Estados para filtros, ordenação e paginação
+  // Estados para filtros, ordenaÃ§Ã£o e paginaÃ§Ã£o
   const [mlSearchTerm, setMlSearchTerm] = useState('');
   const [mlSortConfig, setMlSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'criado_em', direction: 'desc' });
   const [mlCurrentPage, setMlCurrentPage] = useState(1);
@@ -8733,7 +7007,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       setUnreadCount(data.count);
     });
 
-    // A contagem agora pode vir das conversas globais, mas mantemos o fetch inicial por segurança
+    // A contagem agora pode vir das conversas globais, mas mantemos o fetch inicial por seguranÃ§a
     /*
     fetchWithRetry('/api/whatsapp/messages')
       .then(res => res.json())
@@ -8822,13 +7096,13 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
         if (data.success) {
           setProfilePhoto(data.url);
           localStorage.setItem(`profilePhoto_${phone}`, data.url);
-          console.log('✅ Foto de perfil atualizada:', data.url);
+          console.log('âœ… Foto de perfil atualizada:', data.url);
         } else {
           alert('Erro ao enviar foto: ' + data.error);
         }
       } catch (error) {
-        console.error('❌ Erro ao enviar foto de perfil:', error);
-        alert('Erro de conexão ao enviar foto');
+        console.error('âŒ Erro ao enviar foto de perfil:', error);
+        alert('Erro de conexÃ£o ao enviar foto');
       }
     }
   };
@@ -8850,7 +7124,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
       setAllMlListings(data.data || []);
       setShowAllMlAds(true);
     } catch (err) {
-      console.error('Erro ao buscar todos os anúncios ML:', err);
+      console.error('Erro ao buscar todos os anÃºncios ML:', err);
     } finally {
       setIsMlListingsLoading(false);
     }
@@ -8946,7 +7220,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                   )}>
                     RK <span className="text-violet-500">SUCATAS</span>
                   </span>
-                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Gestão Inteligente</span>
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">GestÃ£o Inteligente</span>
                 </motion.div>
               )}
             </div>
@@ -8990,7 +7264,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               {(userRole === 'admin' || userRole === 'gerente') && (
                 <SidebarItem 
                   icon={UserCog} 
-                  label={isSidebarOpen ? "Usuários" : ""} 
+                  label={isSidebarOpen ? "UsuÃ¡rios" : ""} 
                   active={activeTab === 'users'} 
                   onClick={() => setActiveTab('users')} 
                   theme={theme}
@@ -9069,12 +7343,12 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                activeTab === 'vendas' ? 'Vendas' :
                activeTab === 'estoque' ? 'Estoque' :
                activeTab === 'motos' ? 'Motos' :
-               activeTab === 'catalogo' ? 'Catálogo' :
+               activeTab === 'catalogo' ? 'CatÃ¡logo' :
                activeTab === 'atendimento' ? 'Atendimento' :
                activeTab === 'clients' ? 'Clientes' :
                activeTab === 'mercadolivre' ? 'Mercado Livre' :
                activeTab === 'frete' ? 'Frete' :
-               activeTab === 'users' ? 'Usuários' :
+               activeTab === 'users' ? 'UsuÃ¡rios' :
                activeTab === 'audit' ? 'Auditoria' :
                activeTab}
             </h2>
@@ -9087,7 +7361,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                 "p-2 rounded-lg transition-all duration-300 relative",
                 theme === 'dark' ? "hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200" : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-700"
               )}
-              title="Notificações"
+              title="NotificaÃ§Ãµes"
             >
               <Bell size={20} />
               {notifications.filter(n => !n.read).length > 0 && (
@@ -9120,14 +7394,14 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               )}
             >
               <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center">
-                <h3 className="font-bold text-sm">Notificações</h3>
+                <h3 className="font-bold text-sm">NotificaÃ§Ãµes</h3>
                 <button onClick={() => setIsNotificationsOpen(false)} className="p-1 rounded-full hover:bg-zinc-800">
                   <X size={16} />
                 </button>
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-zinc-500">Nenhuma notificação</div>
+                  <div className="p-4 text-center text-sm text-zinc-500">Nenhuma notificaÃ§Ã£o</div>
                 ) : (
                   notifications.map(n => (
                     <div key={n.id} className={cn("p-4 border-b border-zinc-800/50 text-sm", !n.read && "bg-violet-500/10")}>
@@ -9216,7 +7490,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
               ) : activeTab === 'clients' ? (
                 <div className={cn("p-6", theme === 'dark' ? "text-white" : "text-zinc-900")}>
                   <h2 className="text-2xl font-bold mb-4">Clientes</h2>
-                  <p>Funcionalidade de visualização de clientes em breve.</p>
+                  <p>Funcionalidade de visualizaÃ§Ã£o de clientes em breve.</p>
                 </div>
               ) : activeTab === 'mercadolivre' ? (
                 <MercadoLivre theme={theme} />
@@ -9252,7 +7526,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
         />
       )}
       
-      {/* Grupo de ações flutuantes - Only for Admin/Gerente/Estoque */}
+      {/* Grupo de aÃ§Ãµes flutuantes - Only for Admin/Gerente/Estoque */}
       {userRole !== 'client' && !isMoreMenuOpen && !isAnyModalOpen && (
         <div className="fixed bottom-24 md:bottom-8 right-6 z-[60] flex flex-col gap-3">
           <GlobalSearch 

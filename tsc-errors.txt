@@ -1,0 +1,9 @@
+capacitor.config.ts(7,3): error TS2353: Object literal may only specify known properties, and 'bundledWebRuntime' does not exist in type 'CapacitorConfig'.
+src/App.tsx(3226,9): error TS2322: Type 'Dispatch<SetStateAction<{ key: string; direction: "desc" | "asc"; }>>' is not assignable to type '(value: { key: string; direction: string; }) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type '{ key: string; direction: string; }' is not assignable to type 'SetStateAction<{ key: string; direction: "desc" | "asc"; }>'.
+      Type '{ key: string; direction: string; }' is not assignable to type '{ key: string; direction: "desc" | "asc"; }'.
+        Types of property 'direction' are incompatible.
+          Type 'string' is not assignable to type '"desc" | "asc"'.
+src/App.tsx(8550,85): error TS2304: Cannot find name 'FirebaseUser'.
+src/components/AdminUsers.tsx(196,85): error TS2339: Property 'email' does not exist on type 'ClientData'.
