@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useRef, createContext } from 'react';
-import { io } from 'socket.io-client';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Capacitor } from '@capacitor/core';
 import { fetchWithRetry, parseJson } from '../utils/api';
 
 // DataContext: contexto global de dados compartilhado entre todas as views
-// Fornece inventory, sales, motos, loading, whatsapp e funções de refresh
+// Fornece inventory, sales, motos, loading e funções de refresh
 export const DataContext = createContext<{
   inventory: any[];
   sales: any[];
   motos: any[];
   loading: boolean;
-  whatsappStatus: { connected: boolean, isConnecting: boolean, reconnectAttempts: number };
-  whatsappConversations: any[];
-  whatsappQr: string | null;
   setInventory: React.Dispatch<React.SetStateAction<any[]>>;
   setSales: React.Dispatch<React.SetStateAction<any[]>>;
   setMotos: React.Dispatch<React.SetStateAction<any[]>>;
@@ -25,9 +21,6 @@ export const DataContext = createContext<{
   sales: [],
   motos: [],
   loading: false,
-  whatsappStatus: { connected: false, isConnecting: false, reconnectAttempts: 0 },
-  whatsappConversations: [],
-  whatsappQr: null,
   setInventory: () => {},
   setSales: () => {},
   setMotos: () => {},
@@ -36,7 +29,7 @@ export const DataContext = createContext<{
   setShowSensitiveInfo: () => {},
 });
 
-// DataProvider: carrega dados de estoque/vendas/motos e gerencia socket WhatsApp
+// DataProvider: carrega dados de estoque/vendas/motos
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const [inventory, setInventory] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
@@ -61,9 +54,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [lastFetch, setLastFetch] = useState(0);
   const lastMutationRef = useRef(0);
-  const [whatsappStatus, setWhatsappStatus] = useState({ connected: false, isConnecting: false, reconnectAttempts: 0 });
-  const [whatsappConversations, setWhatsappConversations] = useState<any[]>([]);
-  const [whatsappQr, setWhatsappQr] = useState<string | null>(null);
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const CACHE_TIME = 5 * 1000; // 5 segundos
 
@@ -167,37 +157,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadData();
 
-    const socket = io();
-
-    socket.on('whatsapp-status', (status) => {
-      setWhatsappStatus(status);
-      if (status.connected) setWhatsappQr(null);
-    });
-
-    socket.on('whatsapp-qr', (qr) => {
-      setWhatsappQr(qr);
-      setWhatsappStatus(prev => ({ ...prev, connected: false, isConnecting: true }));
-    });
-
-    socket.on('whatsapp-conversations', (conversations) => {
-      const sorted = [...conversations].sort((a, b) =>
-        new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime()
-      );
-      setWhatsappConversations(sorted);
-    });
-
-    socket.on('whatsapp-message-updated', (updatedMsg) => {
-      setWhatsappConversations(prev => prev.map(conv => {
-        if (conv.number === updatedMsg.number) {
-          return {
-            ...conv,
-            messages: conv.messages.map((m: any) => m.id === updatedMsg.id ? updatedMsg : m)
-          };
-        }
-        return conv;
-      }));
-    });
-
     // Polling silencioso a cada 10s apenas quando a aba está visível
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -218,7 +177,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     initApp();
 
     return () => {
-      socket.disconnect();
       clearInterval(interval);
     };
   }, []);
@@ -229,9 +187,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       sales,
       motos,
       loading,
-      whatsappStatus,
-      whatsappConversations,
-      whatsappQr,
       setInventory,
       setSales,
       setMotos: (val) => {
@@ -254,4 +209,3 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     </DataContext.Provider>
   );
 }
-

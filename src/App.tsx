@@ -65,8 +65,8 @@ import {
   Edit2,
   LayoutGrid,
   Table as TableIcon,
-  MessageSquare,
   Upload,
+
   User,
   Camera,
   Image as ImageIcon,
@@ -113,7 +113,6 @@ import { CustomDropdown } from './components/CustomDropdown';
 import { CATEGORIAS_OFICIAIS, MOTOS_OFICIAIS, PAGAMENTOS_OFICIAIS } from './constants/lists';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { FreteView } from './components/FreteView';
-import { Atendimento } from './views/AtendimentoView';
 import { MercadoLivre } from './views/MercadoLivreView';
 import { RegistroModal } from './components/RegistroModal';
 import { io } from 'socket.io-client';
@@ -280,9 +279,6 @@ export const DataContext = createContext<{
   sales: any[];
   motos: any[];
   loading: boolean;
-  whatsappStatus: { connected: boolean, isConnecting: boolean, reconnectAttempts: number };
-  whatsappConversations: any[];
-  whatsappQr: string | null;
   setInventory: React.Dispatch<React.SetStateAction<any[]>>;
   setSales: React.Dispatch<React.SetStateAction<any[]>>;
   setMotos: React.Dispatch<React.SetStateAction<any[]>>;
@@ -294,9 +290,6 @@ export const DataContext = createContext<{
   sales: [],
   motos: [],
   loading: false,
-  whatsappStatus: { connected: false, isConnecting: false, reconnectAttempts: 0 },
-  whatsappConversations: [],
-  whatsappQr: null,
   setInventory: () => {},
   setSales: () => {},
   setMotos: () => {},
@@ -327,9 +320,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [lastFetch, setLastFetch] = useState(0);
   const lastMutationRef = useRef(0);
-  const [whatsappStatus, setWhatsappStatus] = useState({ connected: false, isConnecting: false, reconnectAttempts: 0 });
-  const [whatsappConversations, setWhatsappConversations] = useState<any[]>([]);
-  const [whatsappQr, setWhatsappQr] = useState<string | null>(null);
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(true);
   const CACHE_TIME = 5 * 1000; // 5 segundos
 
@@ -441,38 +431,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // Carrega os dados imediatamente ao montar o componente
     loadData();
 
-    // Socket global para WhatsApp e Notificações
-    const socket = io();
-    
-    socket.on('whatsapp-status', (status) => {
-      setWhatsappStatus(status);
-      if (status.connected) setWhatsappQr(null);
-    });
-
-    socket.on('whatsapp-qr', (qr) => {
-      setWhatsappQr(qr);
-      setWhatsappStatus(prev => ({ ...prev, connected: false, isConnecting: true }));
-    });
-
-    socket.on('whatsapp-conversations', (conversations) => {
-      const sorted = [...conversations].sort((a, b) => 
-        new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime()
-      );
-      setWhatsappConversations(sorted);
-    });
-
-    socket.on('whatsapp-message-updated', (updatedMsg) => {
-      setWhatsappConversations(prev => prev.map(conv => {
-        if (conv.number === updatedMsg.number) {
-          return {
-            ...conv,
-            messages: conv.messages.map((m: any) => m.id === updatedMsg.id ? updatedMsg : m)
-          };
-        }
-        return conv;
-      }));
-    });
-
     // Polling para sincronização "instantânea" (silenciosa)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -493,7 +451,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     initApp();
 
     return () => {
-      socket.disconnect();
       clearInterval(interval);
     };
   }, []);
@@ -504,9 +461,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       sales, 
       motos,
       loading, 
-      whatsappStatus,
-      whatsappConversations,
-      whatsappQr,
       setInventory, 
       setSales, 
       setMotos: (val) => {
@@ -4830,13 +4784,13 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
   const setShowSensitiveInfo = context?.setShowSensitiveInfo ?? (() => {});
   const [userRole, setUserRole] = useState<string>(localStorage.getItem('user_role') || 'client');
   const [isClientRegistered, setIsClientRegistered] = useState<boolean>(localStorage.getItem('rk_client_registered') === 'true');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'estoque' | 'vendas' | 'motos' | 'catalogo' | 'atendimento' | 'frete' | 'clients' | 'mercadolivre' | 'users' | 'audit'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'estoque' | 'vendas' | 'motos' | 'catalogo' | 'frete' | 'clients' | 'mercadolivre' | 'users' | 'audit'>(() => {
     const path = window.location.pathname.replace('/', '');
     const role = localStorage.getItem('user_role') || 'client';
     
     // Se for ADM, abre no dashboard ou na aba da URL
     if (role === 'admin' || role === 'gerente') {
-      return (path && ['dashboard', 'estoque', 'vendas', 'motos', 'catalogo', 'atendimento', 'frete', 'clients', 'mercadolivre', 'users', 'audit'].includes(path)) ? path as any : 'dashboard';
+      return (path && ['dashboard', 'estoque', 'vendas', 'motos', 'catalogo', 'frete', 'clients', 'mercadolivre', 'users', 'audit'].includes(path)) ? path as any : 'dashboard';
     }
     
     // Se for cliente, abre sempre no catálogo
@@ -4848,7 +4802,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
     // Roteamento Client-Side: Sincronizar URL e restringir acesso
     const path = window.location.pathname.replace('/', '');
     const role = localStorage.getItem('user_role') || 'client';
-    const validTabs = ['dashboard', 'estoque', 'vendas', 'motos', 'atendimento', 'frete', 'clients', 'mercadolivre', 'users', 'audit'];
+    const validTabs = ['dashboard', 'estoque', 'vendas', 'motos', 'frete', 'clients', 'mercadolivre', 'users', 'audit'];
     
     if (role === 'client') {
       if (path !== 'catalogo') {
@@ -4894,7 +4848,6 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [mlDashboardData, setMlDashboardData] = useState<any>(null);
   const [isMlDashboardLoading, setIsMlDashboardLoading] = useState(false);
   const [dashboardSource, setDashboardSource] = useState<'estoque' | 'mercadolivre'>('estoque');
@@ -5004,27 +4957,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
     }
   }, []);
 
-  useEffect(() => {
-    const socket = io();
-    socket.on('whatsapp-notification', (data: { count: number }) => {
-      setUnreadCount(data.count);
-    });
-
-    // A contagem agora pode vir das conversas globais, mas mantemos o fetch inicial por segurança
-    /*
-    fetchWithRetry('/api/whatsapp/messages')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setUnreadCount(data.data.filter((m: any) => m.status === 'unread').length);
-        }
-      });
-    */
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
+  
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
@@ -5137,7 +5070,7 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
     if (!selectedDetailItem) return { edit: undefined, delete: undefined };
     const item = selectedDetailItem;
     
-    const wrapEdit = (originalEdit: any, tab: 'dashboard' | 'estoque' | 'vendas' | 'motos' | 'atendimento' | 'frete' | 'clients' | 'mercadolivre') => {
+    const wrapEdit = (originalEdit: any, tab: 'dashboard' | 'estoque' | 'vendas' | 'motos' | 'frete' | 'clients' | 'mercadolivre') => {
       if (!originalEdit) {
         return (item: any) => {
           setActiveTab(tab);
@@ -5307,16 +5240,6 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                   theme={theme}
                 />
               )}
-              {(userRole === 'admin' || userRole === 'gerente') && (
-                <SidebarItem 
-                  icon={MessageSquare} 
-                  label={isSidebarOpen ? "Atendimento" : ""} 
-                  active={activeTab === 'atendimento'} 
-                  onClick={() => setActiveTab('atendimento')} 
-                  theme={theme}
-                  badge={unreadCount > 0 ? unreadCount : undefined}
-                />
-              )}
               <SidebarItem 
                 icon={LogOut} 
                 label={isSidebarOpen ? "Sair" : ""} 
@@ -5350,7 +5273,6 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                activeTab === 'estoque' ? 'Estoque' :
                activeTab === 'motos' ? 'Motos' :
                activeTab === 'catalogo' ? 'Catálogo' :
-               activeTab === 'atendimento' ? 'Atendimento' :
                activeTab === 'clients' ? 'Clientes' :
                activeTab === 'mercadolivre' ? 'Mercado Livre' :
                activeTab === 'frete' ? 'Frete' :
@@ -5504,8 +5426,6 @@ function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUs
                 <AdminUsers userRole={userRole} onModalChange={setIsAnyModalOpen} theme={theme} />
               ) : activeTab === 'audit' ? (
                 <AuditLogs />
-              ) : activeTab === 'atendimento' ? (
-                <Atendimento theme={theme} />
               ) : activeTab === 'frete' ? (
                 <FreteView theme={theme} />
               ) : (
