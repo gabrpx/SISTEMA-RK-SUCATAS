@@ -482,7 +482,10 @@ export const InventoryView = memo(({ theme, onSelectItem, onRegisterActions, isS
         }
         
         const updatedItem = await response.json();
-        setInventory(prev => prev.map(item => item.id === editingItem.id ? updatedItem : item));
+        if (!updatedItem?.success || !updatedItem?.data) {
+          throw new Error('Resposta inválida ao atualizar item');
+        }
+        setInventory(prev => prev.map(item => item.id === editingItem.id ? updatedItem.data : item));
       } else {
         // Create
         const response = await fetchWithRetry('/api/produtos', {
@@ -497,7 +500,10 @@ export const InventoryView = memo(({ theme, onSelectItem, onRegisterActions, isS
         }
         
         const newItem = await response.json();
-        setInventory(prev => [newItem, ...prev]);
+        if (!newItem?.success || !newItem?.data) {
+          throw new Error('Resposta inválida ao criar item');
+        }
+        setInventory(prev => [newItem.data, ...prev]);
       }
       
       setIsModalOpen(false);
