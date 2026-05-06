@@ -3617,9 +3617,6 @@ function formatInventoryItem(page: any) {
   });
 
   // ==================== MERCADO LIVRE ROUTES ====================
-  });
-
-  });
 
   // Error handler for API routes
   app.use('/api', (err: any, req: any, res: any, next: any) => {
@@ -3709,7 +3706,8 @@ function formatInventoryItem(page: any) {
     ]).then(() => {
       console.log('✅ Warm-up do cache do Notion concluído.');
     });
-  });
+
+  });
 
   // Graceful shutdown
   const shutdown = async () => {
