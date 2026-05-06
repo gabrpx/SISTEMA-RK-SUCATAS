@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,23 +20,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Build web app
         run: npm run build
 
-      - name: Install Capacitor
+      - name: Ensure Android platform exists
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          if [ ! -d "android" ]; then npx cap add android; fi
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
 
       - name: Create google-services.json
         run: |
@@ -76,11 +85,16 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK output
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: rk-sucatas-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 30
