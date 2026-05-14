@@ -1695,7 +1695,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
 
                 <div className="p-8 pb-4 flex items-center gap-4 border-b border-zinc-800/50">
                   <div className="p-3 bg-violet-600/10 rounded-2xl">
-                    <Edit className="text-violet-500" size={28} />
+<Edit2 className="text-violet-500" size={28} />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Editar Moto</h2>
