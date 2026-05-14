@@ -6,6 +6,8 @@ import { CustomDropdown } from "../components/CustomDropdown";
 import { useDebounce } from "../hooks/useDebounce";
 import { fetchWithRetry } from "../lib/apiClient";
 import { DataContext } from "../App";
+import { MotoCard } from "../components/MotoCard";
+
 
 const MotoRow = memo(({ 
   item, 
