@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap-sync": "npm run build && npx cap sync android"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -19,9 +20,9 @@
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
-    "@capgo/capacitor-updater": "^8.43.11",
+    "@capgo/capacitor-updater": "^8.43.11", 
     "@google-cloud/storage": "^7.19.0",
-    "@google/genai": "^1.29.0",
+    "@google/generative-ai": "^0.21.0",
     "@notionhq/client": "^5.12.0",
     "@supabase/supabase-js": "^2.104.0",
     "@tailwindcss/vite": "^4.1.14",

@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20 # Utilizando Node 20 (LTS) para maior estabilidade com Capacitor 6
+          node-version: 20 # Sincronizado com render.yaml para estabilidade
           cache: 'npm'
 
       - name: Setup Java JDK 17
@@ -32,7 +32,7 @@ jobs:
 
       - name: Generate Android Assets (Icons)
         # Gera automaticamente todos os tamanhos de ícones para Android a partir do PNG
-        run: npx @capacitor/assets generate --android --icon icone_rk.png
+        run: npx @capacitor/assets generate --android --iconBySquare icone_rk.png
 
       - name: Capacitor Sync
         run: npx cap sync android

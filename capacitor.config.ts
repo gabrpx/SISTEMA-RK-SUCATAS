@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   bundledWebRuntime: false,
   server: {
-    url: 'https://rk-sucatas-api.onrender.com',  // ← URL do Render após deploy
+    // url: 'https://rk-sucatas-api.onrender.com',  // Remova ou comente para builds de produção
     cleartext: true
   }
 };

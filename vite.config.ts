@@ -7,6 +7,7 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
+    base: './', // Necessário para o Capacitor carregar corretamente os assets
     build: {
       outDir: 'dist',
     },
