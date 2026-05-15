@@ -43,6 +43,7 @@
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "multer": "^2.1.1",
+    "node": "^22.22.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-virtualized-auto-sizer": "^2.0.3",
