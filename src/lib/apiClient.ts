@@ -8,9 +8,13 @@ export const parseJson = async (res: Response) => {
   }
 };
 
+const BASE_URL = 'https://rk-sucatas-987595911324.southamerica-east1.run.app';
+
 export const fetchWithRetry = async (url: string, init?: RequestInit, retries = 8) => {
-  const isInternal = url.startsWith('/') || url.startsWith(window.location.origin);
+  const isInternal = url.startsWith('/') || url.startsWith(window.location.origin) || url.startsWith(BASE_URL);
   let localToken = null;
+  
+  const targetUrl = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 
   if (isInternal) {
     try {
@@ -25,11 +29,11 @@ export const fetchWithRetry = async (url: string, init?: RequestInit, retries = 
     ...(localToken ? { Authorization: `Bearer ${localToken}` } : {}),
   };
 
-  console.log(`🔍 Fetching ${url} with method ${init?.method || 'GET'} and headers:`, headers);
+  console.log(`🔍 Fetching ${targetUrl} with method ${init?.method || 'GET'} and headers:`, headers);
 
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(url, { ...init, headers });
+      const res = await fetch(targetUrl, { ...init, headers });
 
       if (res.status === 503 || res.status === 502) {
         throw new Error('Servidor indisponível (iniciando)');

@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
   server: {
     // url: 'https://rk-sucatas-api.onrender.com',  // Remova ou comente para builds de produção
     cleartext: true
+  },
+  plugins: {
+    CapacitorUpdater: {
+      autoUpdate: true,
+      statsUrl: "https://api.capgo.app/stats/"
+    }
   }
 };
 
