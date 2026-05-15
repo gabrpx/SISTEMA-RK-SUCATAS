@@ -2720,23 +2720,18 @@ function formatInventoryItem(page: any) {
       const { pergunta } = req.body;
       console.log(`\n🤖 IA Assistant: "${pergunta}"`);
       
-      const PORT = Number(process.env.PORT) || 3000;
-      
-      // Carrega dados do sistema
-      const [inventoryRes, salesRes] = await Promise.all([
-        fetch(`http://127.0.0.1:${PORT}/api/inventory`),
-        fetch(`http://127.0.0.1:${PORT}/api/sales`)
+      // Carrega dados do sistema diretamente das funções internas (evita erro 401 de auth em chamadas locais)
+      const [inventoryRaw, salesRaw] = await Promise.all([
+        fetchAllFromNotion(DATABASE_ID).catch(() => []),
+        fetchAllFromNotion(salesDbId).catch(() => [])
       ]);
-      
-      const inventory = await inventoryRes.json();
-      const sales = await salesRes.json();
       
       // Prepara contexto
       const contexto = {
-        estoque: inventory.data || [],
-        vendas: sales.data || [],
-        totalItens: inventory.total || 0,
-        totalVendas: sales.total || 0
+        estoque: inventoryRaw.map(formatInventoryItem),
+        vendas: salesRaw.map(formatSalesItem),
+        totalItens: inventoryRaw.length,
+        totalVendas: salesRaw.length
       };
       
       // Chama Gemini para interpretar a intenção
@@ -2758,7 +2753,7 @@ function formatInventoryItem(page: any) {
         fallbackReason = "A chave da API do Gemini não está configurada no servidor.";
       } else {
         try {
-          const { GoogleGenAI, Type } = await import("@google/genai");
+          const { GoogleGenAI, SchemaType } = await import("@google/generative-ai");
           const ai = new GoogleGenAI({ apiKey });
           
           const prompt = `
@@ -2781,27 +2776,27 @@ function formatInventoryItem(page: any) {
             }
           `;
           
-          const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: prompt,
-            config: {
+          const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
               responseMimeType: "application/json",
               responseSchema: {
-                type: Type.OBJECT,
+                type: SchemaType.OBJECT,
                 properties: {
-                  intencao: { type: Type.STRING },
-                  termo: { type: Type.STRING },
-                  periodo: { type: Type.STRING },
-                  dataInicio: { type: Type.STRING },
-                  dataFim: { type: Type.STRING },
-                  resposta: { type: Type.STRING }
+                  intencao: { type: SchemaType.STRING },
+                  termo: { type: SchemaType.STRING },
+                  periodo: { type: SchemaType.STRING },
+                  dataInicio: { type: SchemaType.STRING },
+                  dataFim: { type: SchemaType.STRING },
+                  resposta: { type: SchemaType.STRING }
                 },
                 required: ["intencao", "resposta"]
               }
             }
           });
           
-          const text = response.text;
+          const text = result.response.text();
           try {
             iaResponse = JSON.parse(text || '{}');
           } catch {
