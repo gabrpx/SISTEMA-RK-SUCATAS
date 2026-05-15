@@ -1,7 +1,6 @@
 // src/services/storageService.ts
-
-// Serviço de armazenamento para Google Cloud Storage (opcional)
-// Se não estiver configurado, apenas retorna URLs vazias
+import { supabase } from './supabaseClient.js';
+import fs from 'fs';
 
 interface UploadResult {
   publicUrl: string;
@@ -17,8 +16,26 @@ const storageService = {
    * Faz upload de um arquivo para o storage
    */
   uploadFile: async (filePath: string, filename: string, mimeType: string): Promise<UploadResult> => {
-    console.log(`⚠️ Upload para storage não configurado. Arquivo: ${filename}`);
-    return { publicUrl: '' };
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      const { data, error } = await supabase.storage
+        .from('motos')
+        .upload(`images/${filename}`, fileBuffer, {
+          contentType: mimeType,
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('motos')
+        .getPublicUrl(data.path);
+
+      return { publicUrl };
+    } catch (error) {
+      console.error('Error uploading to Supabase Storage:', error);
+      return { publicUrl: '' };
+    }
   },
 
   /**

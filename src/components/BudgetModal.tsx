@@ -25,16 +25,7 @@ interface BudgetModalProps {
 }
 
 export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme }) => {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
+  // Overflow/scroll do body é controlado centralmente no AppContent para evitar conflitos entre modais.
 
   const { inventory: items } = useContext(DataContext);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,11 +36,14 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return [];
     const term = searchTerm.toLowerCase();
-    return items.filter(item => 
-      item.nome.toLowerCase().includes(term) || 
-      item.moto.toLowerCase().includes(term) ||
-      item.categoria.toLowerCase().includes(term)
-    ).slice(0, 10);
+    return (items || []).filter(item => {
+      // Proteção contra campos nulos ou indefinidos vindos do Notion
+      const nome = (item.nome?.toLowerCase() || '');
+      const moto = (item.moto?.toLowerCase() || '');
+      const categoria = (item.categoria?.toLowerCase() || '');
+      
+      return nome.includes(term) || moto.includes(term) || categoria.includes(term);
+    }).slice(0, 10);
   }, [items, searchTerm]);
 
   const addToBudget = (item: any) => {
@@ -83,7 +77,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
 
   const [discountType, setDiscountType] = useState<'fixed' | 'percent'>('fixed');
 
-  const total = selectedItems.reduce((acc, item) => acc + (item.valor * item.quantity), 0);
+  const total = selectedItems.reduce((acc, item) => acc + ((Number(item.valor) || 0) * item.quantity), 0);
   const discountAmount = discountType === 'fixed' ? discount : (total * (discount / 100));
   const finalTotal = Math.max(0, total - discountAmount);
 
@@ -91,7 +85,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
     const budgetText = selectedItems.map(item => {
       // Extract moto name from part name to avoid duplication
       let cleanName = item.nome;
-      const motoName = item.moto;
+      const motoName = item.moto || '';
       
       // Case-insensitive replacement of moto name in part name
       // We also try to catch common separators around the moto name
@@ -105,10 +99,11 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
                           .replace(/^[\s\-\/|:—]+|[\s\-\/|:—]+$/g, '')
                           .trim();
 
-      const itemTotal = item.valor * item.quantity;
+      const unitPrice = Number(item.valor) || 0;
+      const itemTotal = unitPrice * item.quantity;
       const priceDisplay = item.quantity > 1 
-        ? `${item.quantity}x R$ ${item.valor.toFixed(2)} = R$ ${itemTotal.toFixed(2)}`
-        : `R$ ${item.valor.toFixed(2)}`;
+        ? `${item.quantity}x R$ ${unitPrice.toFixed(2)} = R$ ${itemTotal.toFixed(2)}`
+        : `R$ ${unitPrice.toFixed(2)}`;
 
       return `• ${cleanName} (${motoName}) - ${priceDisplay}`;
     }).join('\n');
@@ -234,7 +229,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-xs font-black text-emerald-400">R$ {item.valor.toFixed(2)}</p>
+                            <p className="text-xs font-black text-emerald-400">R$ {(Number(item.valor) || 0).toFixed(2)}</p>
                             <p className="text-[8px] text-zinc-500 uppercase font-bold">Estoque: {item.estoque}</p>
                           </div>
                         </button>
@@ -309,7 +304,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, theme
                             </button>
                           </div>
                           <div className="text-right min-w-[55px] md:min-w-[65px]">
-                            <p className="text-[11px] md:text-xs font-black text-emerald-400">R$ {(item.valor * item.quantity).toFixed(2)}</p>
+                            <p className="text-[11px] md:text-xs font-black text-emerald-400">R$ {((Number(item.valor) || 0) * item.quantity).toFixed(2)}</p>
                           </div>
                         </div>
                       </div>

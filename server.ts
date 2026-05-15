@@ -540,39 +540,55 @@ async function startServer() {
     DATABASE_ID,
   });
 
-  // Rota pública para leitura do catálogo de motos
+  // Rota pública para leitura do catálogo de motos (100% Supabase)
   app.get("/api/motos", async (req, res) => {
     try {
-      const force = req.query.force === 'true';
-      if (force) invalidateCache(MOTOS_DATABASE_ID);
-      console.log(`🏍️ Consultando banco de motos: ${MOTOS_DATABASE_ID}`);
-      
-      let allItems = [];
-      try {
-        allItems = await fetchAllFromNotion(MOTOS_DATABASE_ID);
-      } catch (notionErr: any) {
-        console.error("⚠️ Falha ao buscar no Notion. Retornando array vazio para evitar crash.", notionErr.message);
-        return res.json({ success: true, data: [], total: 0, warning: "Erro ao conectar com Notion" });
-      }
+      console.log('🏍️ Consultando motos no Supabase...');
 
-      if (!Array.isArray(allItems)) {
-        console.warn("⚠️ API do Notion não retornou um array para Motos");
-        return res.json({ success: true, data: [], total: 0 });
-      }
+      const { data: motosData, error: motosErr } = await supabase
+        .from('motos')
+        .select('*')
+        .order('criado_em', { ascending: false });
 
-      const formattedData = allItems.map(item => {
-        try {
-          return formatMotosItem(item);
-        } catch (fmtErr) {
-          console.error(`⚠️ Erro ao formatar moto ${item.id}:`, fmtErr);
-          return null;
-        }
-      }).filter(Boolean);
+      if (motosErr) throw motosErr;
 
-      res.json({ success: true, data: formattedData, total: formattedData.length });
+      const motos = (motosData || []) as any[];
+      if (motos.length === 0) return res.json({ success: true, data: [], total: 0 });
+
+      const motoIds = motos.map(m => m.id);
+
+      // Busca todas as imagens de uma vez para montar os cards instantaneamente
+      const { data: imgsData, error: imgsErr } = await supabase
+        .from('moto_imagens')
+        .select('moto_id, url, ordem')
+        .in('moto_id', motoIds);
+
+      if (imgsErr) throw imgsErr;
+
+      const imgsByMoto = new Map<string, { url: string; ordem: number }[]>();
+      (imgsData || []).forEach((row: any) => {
+        const list = imgsByMoto.get(row.moto_id) || [];
+        list.push({ url: row.url, ordem: row.ordem ?? 0 });
+        imgsByMoto.set(row.moto_id, list);
+      });
+
+      const formatted = motos.map((m) => {
+        const list = imgsByMoto.get(m.id) || [];
+        list.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+        const imagens = list.map(x => x.url);
+
+        // Compatibilidade: MotoCard usa item.imagens e também item.imagem
+        return {
+          ...m,
+          imagens,
+          imagem: imagens[0] || ''
+        };
+      });
+
+      res.json({ success: true, data: formatted, total: formatted.length });
     } catch (error: any) {
-      console.error("🔥 Critical Motos API Error:", error.message || error);
-      res.status(500).json({ success: false, error: error.message || "Erro interno no catálogo de motos" });
+      console.error('❌ Motos API Error:', error);
+      res.status(500).json({ success: false, error: error.message || 'Erro interno no catálogo de motos' });
     }
   });
 
@@ -2933,108 +2949,27 @@ function formatInventoryItem(page: any) {
 
   app.post("/api/motos", async (req, res) => {
     try {
-      const data = req.body;
-      console.log('📝 Criando nova moto:', data);
-      
-      const dbData = await getCachedDbStructure(MOTOS_DATABASE_ID);
-      const dbProps = dbData.properties;
+      const { imagens, ...motoData } = req.body;
+      console.log('📝 Criando nova moto no Supabase:', motoData);
 
-      const properties: any = {};
-      
-      // Mapeamento explícito baseado na estrutura do Notion fornecida pelo usuário
-      const mapping: Record<string, string> = {
-        'nome': 'Nome',
-        'cilindrada': 'Cilindrada',
-        'ano': 'Ano',
-        'lote': 'Lote',
-        'imagens': 'Fotos',
-        'descricao': 'Observações',
-        'nome_nf': 'Nome NF',
-        'pecas_retiradas': 'Peças Retiradas',
-        'valor': 'Valor',
-        'marca': 'Marca',
-        'status': 'Status',
-        'cor': 'Cor',
-        'modelo': 'Modelo'
-      };
+      const { data: moto, error: motoErr } = await supabase
+        .from('motos')
+        .insert([{ ...motoData, criado_em: new Date().toISOString() }])
+        .select()
+        .single();
 
-      for (const [field, value] of Object.entries(data)) {
-        if (value === undefined || value === null) continue;
-        
-        const mappedName = mapping[field];
-        if (!mappedName) continue;
-        
-        // Busca insensível a maiúsculas/minúsculas no dbProps
-        const notionPropName = Object.keys(dbProps).find(k => k.toLowerCase() === mappedName.toLowerCase());
-        if (!notionPropName) {
-          console.log(`⚠️ Propriedade "${mappedName}" não encontrada no Notion`);
-          continue;
-        }
-        
-        const propType = dbProps[notionPropName].type;
-        
-        if (propType === 'title') {
-          properties[notionPropName] = {
-            title: [{ text: { content: String(value || '-') } }]
-          };
-        } else if (propType === 'rich_text') {
-          properties[notionPropName] = {
-            rich_text: [{ text: { content: String(value || '') } }]
-          };
-        } else if (propType === 'number') {
-          properties[notionPropName] = {
-            number: Number(value) || 0
-          };
-        } else if (propType === 'select') {
-          if (value) properties[notionPropName] = { select: { name: String(value) } };
-        } else if (propType === 'status') {
-          if (value) properties[notionPropName] = { status: { name: String(value) } };
-        } else if (propType === 'files' && Array.isArray(value)) {
-          // Filtramos URLs que venham do s3 da amazon ou do notion-static
-          const externalUrls = value.filter((url: string) => {
-            if (!url || typeof url !== 'string') return false;
-            return !url.includes('notion-static.com') && !url.includes('amazonaws.com');
-          });
+      if (motoErr) throw motoErr;
 
-          if (externalUrls.length > 0) {
-            properties[notionPropName] = {
-              files: externalUrls.map((url: string) => ({
-                name: `foto_${Date.now()}.jpg`,
-                type: 'external',
-                external: { url }
-              }))
-            };
-          }
-        }
+      if (imagens && Array.isArray(imagens) && imagens.length > 0) {
+        const imgInserts = imagens.map((url: string, index: number) => ({
+          moto_id: moto.id,
+          url,
+          ordem: index
+        }));
+        await supabase.from('moto_imagens').insert(imgInserts);
       }
 
-      console.log("📤 Enviando para o Notion (POST):", JSON.stringify(properties, null, 2));
-
-      const response = await fetch('https://api.notion.com/v1/pages', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${NOTION_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Notion-Version': NOTION_VERSION
-        },
-        body: JSON.stringify({
-          parent: { database_id: MOTOS_DATABASE_ID },
-          properties
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('❌ Erro Notion (POST):', error);
-        throw new Error(`Notion API error: ${error}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Moto criada com sucesso');
-      
-      invalidateCache(MOTOS_DATABASE_ID);
-      
-      res.json({ success: true, data: formatMotosItem(result) });
+      res.json({ success: true, data: { ...moto, imagens: imagens || [] } });
     } catch (error: any) {
       console.error("Create Moto Error:", error);
       res.status(500).json({ success: false, error: error.message });
@@ -3044,126 +2979,31 @@ function formatInventoryItem(page: any) {
   app.patch("/api/motos/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const updateData = req.body;
-      
-      console.log('📝 Recebida requisição PATCH para moto:', id);
-      console.log('📦 Dados recebidos para atualização:', JSON.stringify(req.body, null, 2));
-      console.log('📸 Campo imagens:', req.body.imagens);
-      
-      // Buscar estrutura do banco
-      const dbData = await getCachedDbStructure(MOTOS_DATABASE_ID);
-      const dbProps = dbData.properties;
-      
-      // Construir properties no formato do Notion
-      const properties: any = {};
-      
-      // Mapear campos
-      const fieldMapping: Record<string, string> = {
-        nome: 'Nome',
-        marca: 'Marca',
-        modelo: 'Modelo',
-        ano: 'Ano',
-        valor: 'Valor',
-        cor: 'Cor',
-        cilindrada: 'Cilindrada',
-        lote: 'Lote',
-        nome_nf: 'Nome NF',
-        pecas_retiradas: 'Peças Retiradas',
-        status: 'Status',
-        descricao: 'Observações', // Ajustado para bater com o banco real
-        imagens: 'Fotos'
-      };
-      
-      for (const [field, value] of Object.entries(updateData)) {
-        if (value === undefined || value === null) continue;
-        
-        const propName = fieldMapping[field];
-        if (!propName) continue;
+      const { imagens, ...updateData } = req.body;
+      console.log('📝 Atualizando moto no Supabase:', id);
 
-        // Busca insensível a maiúsculas/minúsculas no dbProps
-        let notionPropName = Object.keys(dbProps).find(k => k.toLowerCase() === propName.toLowerCase());
-        
-        // Fallback especial para imagens
-        if (!notionPropName && field === 'imagens') {
-          notionPropName = Object.keys(dbProps).find(k => 
-            k.toLowerCase() === 'imagem' || 
-            dbProps[k].type === 'files'
-          );
-        }
+      const { data: moto, error: motoErr } = await supabase
+        .from('motos')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
 
-        if (!notionPropName) {
-          console.log(`⚠️ Propriedade "${propName}" não encontrada no Notion`);
-          continue;
-        }
-        
-        const propType = dbProps[notionPropName].type;
-        
-        if (propType === 'title') {
-          properties[notionPropName] = {
-            title: [{ text: { content: String(value) } }]
-          };
-        } else if (propType === 'rich_text') {
-          properties[notionPropName] = {
-            rich_text: [{ text: { content: String(value) } }]
-          };
-        } else if (propType === 'number') {
-          properties[notionPropName] = {
-            number: Number(value)
-          };
-        } else if (propType === 'select') {
-          properties[notionPropName] = {
-            select: { name: String(value) }
-          };
-        } else if (propType === 'status') {
-          properties[notionPropName] = {
-            status: { name: String(value) }
-          };
-        } else if (propType === 'files' && Array.isArray(value)) {
-          // FILTRO CRÍTICO: O Notion não aceita suas próprias URLs temporárias como 'external'
-          // Filtramos URLs que venham do s3 da amazon ou do notion-static
-          const externalUrls = value.filter((url: string) => {
-            if (!url || typeof url !== 'string') return false;
-            const isNotionUrl = url.includes('notion-static.com') || url.includes('amazonaws.com') || url.includes('secure.notion-static.com');
-            return !isNotionUrl;
-          });
+      if (motoErr) throw motoErr;
 
-          if (externalUrls.length > 0) {
-            properties[notionPropName] = {
-              files: externalUrls.map((url: string) => ({
-                name: `foto_${Date.now()}.jpg`,
-                type: 'external',
-                external: { url }
-              }))
-            };
-          }
+      if (imagens && Array.isArray(imagens)) {
+        await supabase.from('moto_imagens').delete().eq('moto_id', id);
+        const imgInserts = imagens.map((url: string, index: number) => ({
+          moto_id: id,
+          url,
+          ordem: index
+        }));
+        if (imgInserts.length > 0) {
+          await supabase.from('moto_imagens').insert(imgInserts);
         }
       }
-      
-      console.log('📤 Enviando para Notion:', JSON.stringify(properties, null, 2));
-      
-      const response = await fetch(`https://api.notion.com/v1/pages/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${NOTION_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Notion-Version': NOTION_VERSION
-        },
-        body: JSON.stringify({ properties })
-      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Erro Notion:', response.status, errorText);
-        throw new Error(`Notion error: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Resposta do Notion:', result);
-      
-      invalidateCache(MOTOS_DATABASE_ID);
-      
-      res.json({ success: true, data: formatMotosItem(result) });
-      
+      res.json({ success: true, data: { ...moto, imagens: imagens || [] } });
     } catch (error: any) {
       console.error("Update Moto Error:", error);
       res.status(500).json({ success: false, error: error.message });
@@ -3173,23 +3013,12 @@ function formatInventoryItem(page: any) {
   app.delete("/api/motos/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const response = await fetch(`https://api.notion.com/v1/pages/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${NOTION_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Notion-Version': NOTION_VERSION
-        },
-        body: JSON.stringify({ archived: true })
-      });
+      const { error } = await supabase
+        .from('motos')
+        .delete()
+        .eq('id', id);
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Notion API error: ${error}`);
-      }
-
-      invalidateCache(MOTOS_DATABASE_ID);
-
+      if (error) throw error;
       res.json({ success: true });
     } catch (error: any) {
       console.error("Delete Moto Error:", error);
@@ -3200,24 +3029,12 @@ function formatInventoryItem(page: any) {
   app.post("/api/motos/bulk-delete", async (req, res) => {
     try {
       const { ids } = req.body;
-      if (!ids || !Array.isArray(ids)) {
-        return res.status(400).json({ success: false, error: "IDs inválidos" });
-      }
+      const { error } = await supabase
+        .from('motos')
+        .delete()
+        .in('id', ids);
 
-      const deletePromises = ids.map(id => 
-        fetch(`https://api.notion.com/v1/pages/${id}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${NOTION_TOKEN}`,
-            'Content-Type': 'application/json',
-            'Notion-Version': NOTION_VERSION
-          },
-          body: JSON.stringify({ archived: true })
-        })
-      );
-
-      await Promise.all(deletePromises);
-      invalidateCache(MOTOS_DATABASE_ID);
+      if (error) throw error;
       res.json({ success: true });
     } catch (error: any) {
       console.error("Bulk Delete Motos Error:", error);

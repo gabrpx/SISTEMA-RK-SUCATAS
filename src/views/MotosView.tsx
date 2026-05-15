@@ -1360,7 +1360,7 @@ export const MotosView = memo(({ theme, onSelectItem, onRegisterActions, isSearc
                                 theme === 'dark' ? "bg-zinc-800/50 text-zinc-400 hover:text-white hover:bg-zinc-700" : "text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
                               )}
                             >
-                              <Edit size={16} />
+<Edit2 size={16} />
                             </button>
                             <button 
                               onClick={() => {
