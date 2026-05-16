@@ -1266,7 +1266,7 @@ const LogoutModal = memo(({ isOpen, onClose, onLogout, theme }: { isOpen: boolea
   );
 });
 
-function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUser: FirebaseUser | null }) {
+function AppContent({ onLogout, currentUser }: { onLogout: () => void, currentUser: any | null }) {
   const context = useContext(DataContext);
   const showSensitiveInfo = context?.showSensitiveInfo ?? true;
   const setShowSensitiveInfo = context?.setShowSensitiveInfo ?? (() => {});

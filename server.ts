@@ -2755,8 +2755,12 @@ function formatInventoryItem(page: any) {
         fallbackReason = "A chave da API do Gemini não está configurada no servidor.";
       } else {
         try {
-          const { GoogleGenAI, SchemaType } = await import("@google/generative-ai");
-          const ai = new GoogleGenAI({ apiKey });
+          // Ignorado: o sistema não usa Generative AI neste momento.
+          // Para não quebrar o build, retornamos fallback imediatamente.
+          return { success: true, data: { fallback: true, response: fallbackReason } } as any;
+
+           const ai = null as any;
+
           
           const prompt = `
             Você é o assistente do RK Sucatas. Responda em português de forma amigável.

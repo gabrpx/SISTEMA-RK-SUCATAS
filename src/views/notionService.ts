@@ -1,4 +1,6 @@
-import { cleanNotionId, toUuid } from '../utils/notionHelpers.js';
+import { cleanNotionId, toUuid } from './notionHelpers';
+
+
 import dotenv from 'dotenv';
 
 dotenv.config();

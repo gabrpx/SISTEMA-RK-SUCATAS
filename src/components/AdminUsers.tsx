@@ -193,7 +193,8 @@ export default function AdminUsers({ userRole, onModalChange, theme = 'dark' }: 
         const clientToMove = clients.find(c => c.id === userId);
         if (clientToMove) {
           setClients(clients.filter(c => c.id !== userId));
-          setUsers([...users, { ...clientToMove, role: newRole, email: clientToMove.email || '' } as any]);
+          // ClientData não garante campo email; mantemos fallback.
+          setUsers([...users, { ...clientToMove, role: newRole, email: (clientToMove as any).email || '' } as any]);
         }
       } else {
         setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { cn } from '../utils';
+import { fetchWithRetry, parseJson } from '../lib/apiClient';
 
 interface Question {
   id: string;
@@ -25,8 +26,8 @@ export default function QuestionsDashboard({ theme }: { theme: 'light' | 'dark' 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/ml/questions?status=all&limit=50')
-      .then(res => res.json())
+    fetchWithRetry('/api/ml/questions?status=all&limit=50')
+      .then(res => parseJson(res))
       .then(data => {
         setQuestions(data.data || []);
         setLoading(false);

@@ -23,6 +23,7 @@ const ListAny = List as any;
 import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { cn } from '../utils';
 import { DataContext } from '../App';
+import { fetchWithRetry, parseJson } from '../lib/apiClient';
 
 interface Client {
   id: string;
@@ -68,11 +69,8 @@ export const Clients = ({ theme }: { theme: 'light' | 'dark' }) => {
   const fetchClients = async (force = false) => {
     if (force) setLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch('/api/clients', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const res = await fetchWithRetry('/api/clients');
+      const data = await parseJson(res);
       if (data.success) {
         setClients(data.data);
         localStorage.setItem('rk_clients', JSON.stringify(data.data));
@@ -126,22 +124,17 @@ export const Clients = ({ theme }: { theme: 'light' | 'dark' }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('auth_token');
     const method = editingClient ? 'PUT' : 'POST';
     const url = editingClient ? `/api/clients/${editingClient.id}` : '/api/clients';
     
     console.log(`🚀 Enviando requisição ${method} para ${url}`, formData);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(formData)
       });
-      const data = await res.json();
+      const data = await parseJson(res);
       console.log('📥 Resposta do servidor:', data);
       if (data.success) {
         setIsModalOpen(false);

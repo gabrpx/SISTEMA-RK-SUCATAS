@@ -278,16 +278,15 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
     setSending(true);
     setSendError(null);
     try {
-      const response = await fetch('/api/whatsapp/send', {
+      const response = await fetchWithRetry('/api/whatsapp/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           number: selectedConversation.number,
           message: replyText
         })
       });
 
-      const data = await response.json();
+      const data = await parseJson(response);
       if (response.ok || data.success) {
         setReplyText('');
         if (data.status === 'queued') {

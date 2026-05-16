@@ -30,8 +30,8 @@ interface StockFiltersProps {
   setSelectedMoto: (value: string) => void;
   
   // Ordenação
-  sortConfig: { key: string; direction: string };
-  setSortConfig: (value: { key: string; direction: string }) => void;
+  sortConfig: { key: string; direction: 'asc' | 'desc' | null };
+  setSortConfig: (value: { key: string; direction: 'asc' | 'desc' | null } | ((prev: any) => any)) => void;
   
   // Estados de loading
   loading: boolean;

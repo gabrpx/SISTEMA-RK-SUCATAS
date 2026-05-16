@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Truck, Loader2, Package, Ruler, Weight, MapPin, DollarSign, Clock } from 'lucide-react';
 import { cn } from '../utils';
+import { fetchWithRetry, parseJson } from '../lib/apiClient';
 
 export const FreteView = ({ theme }: { theme: 'light' | 'dark' }) => {
   const [cep, setCep] = useState('');
@@ -16,8 +17,8 @@ export const FreteView = ({ theme }: { theme: 'light' | 'dark' }) => {
 
   const fetchCityByCep = async (cep: string) => {
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep.replace('-', '')}/json/`);
-      const data = await response.json();
+      const response = await fetchWithRetry(`https://viacep.com.br/ws/${cep.replace('-', '')}/json/`);
+      const data = await parseJson(response);
       return data.localidade || '';
     } catch (error) {
       console.error('Erro ao buscar cidade:', error);
@@ -36,7 +37,7 @@ export const FreteView = ({ theme }: { theme: 'light' | 'dark' }) => {
       setOriginCity(origin);
       setDestinationCity(dest);
 
-      const response = await fetch('/api/frete/calculate', {
+      const response = await fetchWithRetry('/api/frete/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -48,7 +49,7 @@ export const FreteView = ({ theme }: { theme: 'light' | 'dark' }) => {
           comprimento
         })
       });
-      const data = await response.json();
+      const data = await parseJson(response);
       setOptions(data.data || []);
     } catch (error) {
       console.error('Erro ao calcular frete:', error);

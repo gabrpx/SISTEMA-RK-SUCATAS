@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
 import { Loader2, Package, Mail, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { CATEGORIAS_OFICIAIS } from '../constants/lists';
+import { fetchWithRetry, parseJson } from '../lib/apiClient';
 import { supabase } from '../utils/supabase';
 
 interface LoginProps {
@@ -49,8 +50,8 @@ export const Login = ({ onLogin }: LoginProps) => {
   });
 
   useEffect(() => {
-    fetch('/api/public-stats')
-      .then(res => res.json())
+    fetchWithRetry('/api/public-stats')
+      .then(res => parseJson(res))
       .then(data => {
         const newStats = {
           totalPecas: data.totalPecas || 0,
@@ -74,12 +75,11 @@ export const Login = ({ onLogin }: LoginProps) => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/auth/login', {
+      const response = await fetchWithRetry('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await response.json();
+      const data = await parseJson(response);
       
       if (!response.ok) {
         throw new Error(data.error || 'Erro ao entrar');
