@@ -32,7 +32,7 @@ jobs:
 
       - name: Generate Android Assets (Icons)
         # Gera automaticamente todos os tamanhos de ícones para Android a partir do PNG
-        run: npx @capacitor/assets generate --android --iconBySquare icone_rk.png
+        run: npx @capacitor/assets generate --android --icon icone_rk.png
 
       - name: Capacitor Sync
         run: npx cap sync android

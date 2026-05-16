@@ -331,7 +331,6 @@ async function startServer() {
 
   const salesDbId = cleanNotionId(process.env.DATABASE_VENDAS_ID || process.env.NOTION_DB_VENDAS || "2fbdfa25a52880a587ebcca53c478342");
 
-  app.use(express.json());
 
   // Configuração do CORS
   const allowedOrigins = [
@@ -364,11 +363,10 @@ async function startServer() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-format-new']
   }));
 
   // Middleware para interpretar JSON no corpo das requisições
-  app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 

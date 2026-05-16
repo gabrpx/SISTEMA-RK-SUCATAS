@@ -1,18 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
-import admin from 'firebase-admin';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: 'gen-lang-client-0969674405'
-  });
-}
+dotenv.config();
+const JWT_SECRET = process.env.JWT_SECRET || 'rksucatas-fallback-secret-key';
 
 // Lista de rotas que NÃO precisam de autenticação
 const rotasPublicas = [
   '/health',
   '/login',
   '/public-stats',
+  '/api/health',
+  '/api/public-stats',
   '/register',
   '/api/register',
   '/api/login',
@@ -41,8 +40,7 @@ export async function autenticar(req: Request, res: Response, next: NextFunction
   }
 
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    // Adicionar dados do usuário ao request para uso posterior
+    const decoded = jwt.verify(token, JWT_SECRET);
     (req as any).user = decoded;
     next(); // Autenticado, prossegue
   } catch (error) {
