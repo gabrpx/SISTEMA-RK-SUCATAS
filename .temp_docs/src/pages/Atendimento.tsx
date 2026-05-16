@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DataContext } from '../App';
+import { fetchWithRetry, parseJson } from '../lib/apiClient';
 
 interface WhatsAppMessage {
   id: string;
@@ -170,8 +171,8 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
     
     setIsLoggingOut(true);
     try {
-      const response = await fetch('/api/whatsapp/logout', { method: 'POST' });
-      const data = await response.json();
+      const response = await fetchWithRetry('/api/whatsapp/logout', { method: 'POST' });
+      const data = await parseJson(response);
       if (data.success) {
         addLog('🚪 Logout realizado com sucesso');
       }
@@ -185,8 +186,8 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
   const handleReconnect = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch('/api/whatsapp/reconnect', { method: 'POST' });
-      const data = await response.json();
+      const response = await fetchWithRetry('/api/whatsapp/reconnect', { method: 'POST' });
+      const data = await parseJson(response);
       if (data.success) {
         addLog('🔄 Reconexão manual iniciada...');
       }
@@ -208,7 +209,7 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
     if (!window.confirm("Deseja excluir esta mensagem do sistema?")) return;
     
     try {
-      const res = await fetch(`/api/whatsapp/messages/${id}`, { method: 'DELETE' });
+      const res = await fetchWithRetry(`/api/whatsapp/messages/${id}`, { method: 'DELETE' });
       if (res.ok) {
         addLog(`🗑️ Mensagem deletada localmente`);
       }
@@ -222,7 +223,7 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
     if (!window.confirm("Deseja excluir esta mensagem do WhatsApp (Apagar para todos)?")) return;
     
     try {
-      const res = await fetch(`/api/whatsapp/messages/${id}/remote`, { method: 'DELETE' });
+      const res = await fetchWithRetry(`/api/whatsapp/messages/${id}/remote`, { method: 'DELETE' });
       if (res.ok) {
         addLog(`🗑️ Mensagem deletada remotamente`);
       } else {
@@ -239,7 +240,7 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
     if (!window.confirm("Deseja excluir toda a conversa com este contato? Esta ação não pode ser desfeita.")) return;
     
     try {
-      const res = await fetch(`/api/whatsapp/conversations/${number}`, { method: 'DELETE' });
+      const res = await fetchWithRetry(`/api/whatsapp/conversations/${number}`, { method: 'DELETE' });
       if (res.ok) {
         addLog(`🗑️ Conversa com ${number} excluída`);
         if (selectedConversation?.number === number) {
@@ -255,8 +256,8 @@ export const Atendimento: React.FC<AtendimentoProps> = ({ theme }) => {
   const searchInventory = async (termo: string) => {
     setSearching(true);
     try {
-      const response = await fetch(`/api/inventory`);
-      const data = await response.json();
+      const response = await fetchWithRetry(`/api/inventory`);
+      const data = await parseJson(response);
       if (data.success) {
         const filtered = data.data.filter((item: any) => 
           item.nome.toLowerCase().includes(termo.toLowerCase()) ||

@@ -337,6 +337,8 @@ async function startServer() {
   const allowedOrigins = [
     'https://aistudio.google.com',
     'http://localhost:3000',
+    'http://localhost',
+    'capacitor://localhost',
     'https://rk-sucatas-987595911324.southamerica-east1.run.app'
   ];
   

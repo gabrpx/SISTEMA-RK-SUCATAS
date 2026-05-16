@@ -8,6 +8,7 @@ export async function fetchWithRetry(url: string, options: any = {}, retries = 3
   const token = localStorage.getItem('auth_token');
   const headers = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...options.headers,
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
@@ -36,8 +37,8 @@ export async function parseJson(response: Response) {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.error('Erro ao converter resposta para JSON. Recebido:', text.substring(0, 100));
-    throw new Error('Resposta do servidor não é um JSON válido');
+    console.error('Resposta inválida (não JSON):', text.substring(0, 200));
+    throw new Error('O servidor retornou uma resposta inválida. Verifique a conexão com a internet ou se o servidor está online.');
   }
 }
 
