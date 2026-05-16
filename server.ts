@@ -3067,6 +3067,9 @@ function formatInventoryItem(page: any) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: "API endpoint not found" });
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

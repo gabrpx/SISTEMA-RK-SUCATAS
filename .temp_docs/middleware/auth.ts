@@ -15,7 +15,8 @@ const rotasPublicas = [
   '/public-stats',
   '/register',
   '/api/register',
-  '/api/login'
+  '/api/login',
+  '/api/auth/login'
 ];
 
 export async function autenticar(req: Request, res: Response, next: NextFunction) {
